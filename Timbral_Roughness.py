@@ -1,17 +1,5 @@
-# this is a test file for PyCharm
-
-# import wave
-# import AndyWavRead
 import numpy as np
-import librosa
-# import vamplibrosa as vamplib
-# from bisect import bisect_left
-from scipy.signal import spectrogram
-# from scipy.interpolate import interp1d
-# import obspy.signal.filter as obsfilter
-# import scipy.io as sio
 import soundfile as sf
-import matplotlib.pyplot as plt
 
 
 def detect_peaks(array, cthr, unprocessed_array, freq):
@@ -21,7 +9,7 @@ def detect_peaks(array, cthr, unprocessed_array, freq):
     # add values to allow peaks at the first and last values
     array_appended = np.insert(array, [0, len(array)], -2.0)  # to allow peaks at start and end (default of mir)
     # unprocessed array to get peak values
-    array_unprocess_appended = np.insert(unprocessed_array, [0, len(array)], -2.0)
+    array_unprocess_appended = np.insert(unprocessed_array, [0, len(unprocessed_array)], -2.0)
     # append the frequency scale for precise freq calculation
     freq_appended = np.insert(freq, [0, len(freq)], -1.0)
 
@@ -29,24 +17,17 @@ def detect_peaks(array, cthr, unprocessed_array, freq):
     diff_array = np.diff(array_appended)
 
     # find local maxima
-    mx = np.array(np.where((array > cthr) & (diff_array[0:-1] > 0) & (diff_array[1:] <= 0))) + 1
-
-    test1 = np.array(np.where(array > cthr))
-    test2 = np.array(diff_array[0:-1] > 0)
-    test3 = np.array(diff_array[1:] <= 0)
+    mx = np.array(np.where((array >= cthr) & (diff_array[0:-1] > 0) & (diff_array[1:] <= 0))) + 1
 
     # initialise arrays for output
     finalmx = []
     peak_value = []
-    peak_time = []
+    peak_x = []
     peak_idx = []
 
     if np.size(mx) > 0:
         # unpack the array if peaks found
         mx = mx[0]
-
-
-
 
         j = 0  # scans the peaks from beginning to end
         mxj = mx[j]  # the current peak under evaluation
@@ -62,24 +43,22 @@ def detect_peaks(array, cthr, unprocessed_array, freq):
         while jj < len(mx):
             # if adjacent mx values are too close, returns no array
             if mx[jj-1]+1 == mx[jj]-1:
-                bufmin = min([bufmin, array[mx[jj-1]+1]])
+                bufmin = min([bufmin, array_appended[mx[jj-1]]])
             else:
-                bufmin = min([bufmin, min(array[mx[jj-1]+1:mx[jj]-1])])
-
-            # print bufmin
+                bufmin = min([bufmin, min(array_appended[mx[jj-1]:mx[jj]-1])])
 
             if bufmax - bufmin < cthr:
                 # There is no contrastive notch
-                if array[mx[jj]] > bufmax:
+                if array_appended[mx[jj]] > bufmax:
                     # new peak is significant;y higher than the old peak,
                     # the peak is transfered to the new position
                     j = jj
                     mxj = mx[j]  # the current peak
-                    bufmax = array[mxj]
+                    bufmax = array_appended[mxj]
                     oldbufmin = min([oldbufmin, bufmin])
                     bufmin = 2.0
-                elif array[mx[jj]] - bufmax <= 0:
-                    bufmax = max([bufmax, array[mx[jj]]])
+                elif array_appended[mx[jj]] - bufmax <= 0:
+                    bufmax = max([bufmax, array_appended[mx[jj]]])
                     oldbufmin = min([oldbufmin, bufmin])
 
             else:
@@ -92,55 +71,51 @@ def detect_peaks(array, cthr, unprocessed_array, freq):
                     finalmx.append(mxj)
                     oldbufmin = bufmin
 
-                bufmax = array[mx[jj]]
+                bufmax = array_appended[mx[jj]]
                 j = jj
                 mxj = mx[j]  # The current peak
                 bufmin = 2.0
 
             jj += 1
-        if bufmax - oldbufmin >= cthr and (bufmax - min(array[mx[j] + 1:]) >= cthr):
+        if bufmax - oldbufmin >= cthr and (bufmax - min(array_appended[mx[j] + 1:]) >= cthr):
             # The last peak candidate is OK and stored
             finalmx.append(mx[j])
-
 
         ''' Sort the values according to their level '''
         finalmx = np.array(finalmx)
         sort_idx = np.argsort(array_appended[finalmx])[::-1]  # descending sort
         finalmx = finalmx[sort_idx]
 
-        peak_idx = finalmx - 1
+        peak_idx = finalmx - 1  # indexes were for the appended array, -1 to return to original array index
         peak_value = array_unprocess_appended[finalmx]
-        peak_time = freq_appended[finalmx]
+        peak_x = freq_appended[finalmx]
 
         ''' Interpolation for more precise peak location '''
         corrected_value = []
-        corrected_time = []
+        corrected_position = []
         for current_peak_idx in finalmx:
             # if there enough space to do the fitting
             if 1 < current_peak_idx < (len(array_unprocess_appended) - 2):
-                current_sample = array_unprocess_appended[current_peak_idx]
-                next_sample = array_unprocess_appended[current_peak_idx+1]
-                previous_sample = array_unprocess_appended[current_peak_idx-1]
-                p = (next_sample - previous_sample) / (2 * (2*current_sample - next_sample - previous_sample))
-
-                corrected_value.append(current_sample - (0.25*(previous_sample-next_sample)*p))
+                y0 = array_unprocess_appended[current_peak_idx]
+                ym = array_unprocess_appended[current_peak_idx-1]
+                yp = array_unprocess_appended[current_peak_idx+1]
+                p = (yp - ym) / (2 * (2*y0 - yp - ym))
+                corrected_value.append(y0 - (0.25*(ym-yp)*p))
                 if p >= 0:
                     correct_pos = ((1 - p) * freq_appended[current_peak_idx]) + (p * freq_appended[current_peak_idx+1])
-                    corrected_time.append(correct_pos)
-                    # correct_pos = (1-p)*th(mj,k,l)+p*th(mj+1,k,l);
+                    corrected_position.append(correct_pos)
                 elif p < 0:
                     correct_pos = ((1 + p) * freq_appended[current_peak_idx]) - (p * freq_appended[current_peak_idx-1])
-                    corrected_time.append(correct_pos)
-
+                    corrected_position.append(correct_pos)
             else:
                 corrected_value.append(array_unprocess_appended[current_peak_idx])
-                corrected_time.append(freq_appended[current_peak_idx])
+                corrected_position.append(freq_appended[current_peak_idx])
 
-        if corrected_time:
-            peak_time = corrected_time
+        if corrected_position:
+            peak_x = corrected_position
             peak_value = corrected_value
 
-    return peak_idx, peak_value, peak_time
+    return peak_idx, peak_value, peak_x
 
 def plomp(f1, f2):
     b1 = 3.51
@@ -164,9 +139,7 @@ def timbral_roughness(fname):
     :param fname:   File name of the audio
     :return:        Roughness of the audio signal
     """
-
-
-    # use pysoundfile instead
+    # use pysoundfile to read audio
     audio_samples, fs = sf.read(fname, always_2d=False)
 
     num_channels = np.shape(audio_samples)
@@ -174,21 +147,16 @@ def timbral_roughness(fname):
         # take just the left channel
         audio_samples = audio_samples[:, 0]
 
-    # nfft = 2048
-    nfft = 2205
-    window = np.hamming(nfft + 2)
-    window = window[1:-1]
-
-    # print len(window)
-    olap = nfft / 2
-
-    # do my own spectrogram
     # reshape audio
     audio_len = len(audio_samples)
     time_step = 0.05
     step_samples = int(fs * time_step)
+    nfft = step_samples
+    window = np.hamming(nfft + 2)
+    window = window[1:-1]
+    olap = nfft / 2
     num_frames = int((audio_len)/(step_samples-olap))
-    next_pow_2 = np.log(step_samples) /np.log(2)
+    next_pow_2 = np.log(step_samples) / np.log(2)
     next_pow_2 = 2 ** int(next_pow_2 + 1)
 
     reshaped_audio = np.zeros([next_pow_2, num_frames])
@@ -198,7 +166,6 @@ def timbral_roughness(fname):
 
     # get all the audio
     while start_idx+step_samples <= audio_len:
-        # print start_idx
         audio_frame = audio_samples[start_idx:start_idx+step_samples]
 
         # apply window
@@ -221,7 +188,6 @@ def timbral_roughness(fname):
     # normalise
     norm_spec = (spec - np.min(spec)) / (np.max(spec) - np.min(spec))
 
-
     ''' Peak picking algorithm '''
     cthr = 0.01  # threshold for peak picking
 
@@ -232,23 +198,20 @@ def timbral_roughness(fname):
     allpeaktime = []
 
     for i in range(0, no_segments):
-
         d = norm_spec[:, i]
         d_un = spec[:, i]
 
         # find peak candidates
-        peak_pos, peak_level, peak_time = detect_peaks(d, cthr, d_un, freq)
+        peak_pos, peak_level, peak_x = detect_peaks(d, cthr, d_un, freq)
 
-        # print len(d_peaks)
         allpeakpos.append(peak_pos)
         allpeaklevel.append(peak_level)
-        allpeaktime.append(peak_time)
+        allpeaktime.append(peak_x)
 
     ''' get the roughness '''
     allroughness = []
     # for each frame
     for frame in range(len(allpeaklevel)):
-        # print frame
         frame_freq = allpeaktime[frame]
         frame_level = allpeaklevel[frame]
 
@@ -267,11 +230,7 @@ def timbral_roughness(fname):
         else:
             allroughness.append(0)
 
-
     mean_roughness = np.mean(allroughness)
-
-    # plt.plot(allroughness)
-    # plt.show()
 
     return mean_roughness
 
