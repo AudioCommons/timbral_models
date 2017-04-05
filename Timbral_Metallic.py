@@ -37,7 +37,7 @@ def return_loop(onset_loc, envelope, function_time_thresh, wiggle_threshold, his
                                 backwards in time.
         hist_time_samples:      Number of samples to look back after finding the minimum value over 10ms, set to 200ms.
     """
-    
+
     # define flag for exiting while loop
     found_start = False
 
@@ -51,44 +51,57 @@ def return_loop(onset_loc, envelope, function_time_thresh, wiggle_threshold, his
             evaluation_array = envelope[:onset_loc-1]
 
         if min(evaluation_array) - current_sample < 0:
+            '''
+             If the minimum value within previous 10ms is less than current sample,
+             move to the start position to the minimum value and look again.
+            '''
             min_idx = np.argmin(evaluation_array)
-
             new_onset_loc = min_idx + onset_loc - function_time_thresh - 1
 
             if new_onset_loc > 512:
                 onset_loc = new_onset_loc
             else:
+                ''' Current index is close to start of the envelope, so exit with the idx as 0 '''
                 return 0
 
         else:
-            ''' Introduce the time and level hysteresis'''
-            # check we can look back enough
+            '''
+             If the minimum value within previous 10ms is greater than current sample,
+             introduce the time and level hysteresis to check again.
+            '''
+            # get the array of 200ms previous to the current onset idx
             if (onset_loc - hist_time_samples - 1) > 0:
                 hyst_evaluation_array = envelope[onset_loc-hist_time_samples-1:onset_loc - 1]
             else:
                 hyst_evaluation_array = envelope[:onset_loc-1]
 
-            # find the first value that's less than current sample
+            # values less than the current sample
             all_match = np.where(hyst_evaluation_array < envelope[onset_loc])
 
-            # if no minimum was found within the extended time
+            # if no minimum was found within the extended time, exit with current onset idx
             if len(all_match[0]) == 0:
                 return onset_loc
 
+            # get the idx of the closest value which is lower than the current onset idx
             last_min = all_match[0][-1]
-            # last_idx = int(onset_loc-hist_time_samples-1 + last_min)
-            last_idx = int(onset_loc-len(hyst_evaluation_array) + last_min)
-
+            last_idx = int(onset_loc - len(hyst_evaluation_array) + last_min)
 
             # get the dynamic range
             segment_dynamic_range = max(hyst_evaluation_array[last_min:]) - min(hyst_evaluation_array[last_min:])
 
+            # compare this dynamic range against the hyteresis threshold
             if segment_dynamic_range >= wiggle_threshold:
-                # this is a seperate audio event
+                '''
+                 The dynamic range is greater than the threshold, therefore this is a separate audio event.
+                 Return the current onset idx.
+                '''
                 return onset_loc
             else:
+                '''
+                 The dynamic range is less than the threshold, therefore this is not a separate audio event.
+                 Set current onset idx to minimum value and repeat.
+                '''
                 onset_loc = last_idx
-            # return onset_loc
 
 
 def get_attack_envelope(time_samples, fs, decay_time=0.2, hold_time=0.1):
