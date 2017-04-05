@@ -31,7 +31,10 @@ def return_loop(onset_loc, envelope, function_time_thresh, hist_threshold, hist_
         # get the current sample value
         current_sample = envelope[onset_loc]
         # get the previous 10ms worth of samples
-        evaluation_array = envelope[onset_loc-function_time_thresh-1:onset_loc-1]
+        if onset_loc - function_time_thresh >= 0:
+            evaluation_array = envelope[onset_loc-function_time_thresh-1:onset_loc-1]
+        else:
+            evaluation_array = envelope[:onset_loc-1]
 
         if min(evaluation_array) - current_sample < 0:
             '''
@@ -67,7 +70,7 @@ def return_loop(onset_loc, envelope, function_time_thresh, hist_threshold, hist_
 
             # get the idx of the closest value which is lower than the current onset idx
             last_min = all_match[0][-1]
-            last_idx = int(onset_loc-len(hyst_evaluation_array) + last_min)
+            last_idx = int(onset_loc - len(hyst_evaluation_array) + last_min)
 
             # get the dynamic range of this segment
             segment_dynamic_range = max(hyst_evaluation_array[last_min:]) - min(hyst_evaluation_array[last_min:])
