@@ -289,7 +289,7 @@ def timbral_metallic(fname):
     # remove duplicates
     corrected_onsets = (list(set(corrected_onsets)))
     corrected_onsets.sort()
-    
+
     # set defauls for analysis and initialise store lists
     time_decay = int(fs * 0.1)  # number of samples for 100 ms
     time_count = np.arange(0, time_decay, 1)
@@ -319,7 +319,10 @@ def timbral_metallic(fname):
             if peak_idx > 0:
                 if not peak_idx == len(attack_segment)-1:
                     attack_subsegment = attack_segment[:peak_idx+1]
-                attack_dyn_range = max(attack_segment) - min(attack_subsegment)
+                else:
+                    attack_subsegment = attack_segment
+
+                attack_dyn_range = max(attack_subsegment) - min(attack_subsegment)
 
                 # only perform the attack time analysis if dynamic range is greater than 10 %
                 if attack_dyn_range >= 0.1:
@@ -334,9 +337,9 @@ def timbral_metallic(fname):
                     # calculate attack time
                     if not end_idx == start_idx:
                         attack_time = (end_idx - start_idx) / float(fs)
-                        all_attack.append(attack_time)
+                        all_attack.append(np.log10(attack_time))
                     else:
-                        all_attack.append(1.0/fs)
+                        all_attack.append(np.log10(1.0/fs))
 
             '''
              Get spectral features
@@ -361,8 +364,10 @@ def timbral_metallic(fname):
                 r = []
                 if count2 + time_decay <= len(decay_subsegment):
                     while count2 + time_decay < len(decay_subsegment):
+                        # get the decay segment to be evaluated
                         eval_segment = decay_subsegment[count2:count2 + time_decay]
 
+                        # get Pearson's r, test test for negative slope
                         r_hold = np.corrcoef(time_count, eval_segment)[1][0]
                         r.append(r_hold)
 
@@ -374,49 +379,60 @@ def timbral_metallic(fname):
                         else:
                             MSE.append(float("inf"))
 
+                        # step back 100 samples, code takes too long to run stepping back a single sample
                         count2 += 100
 
-
+                    # identify most linear portion of decay
                     if np.min(MSE) != float("inf"):
                         best_idx = np.argmin(MSE)
                         eval_segment = decay_subsegment[best_idx * 100:(best_idx * 100) + time_decay]
 
+                    # get linear predcition of decay
                     hold_poly_vals = np.polyfit(time_count, eval_segment, 1)
                     hold_best_fit = hold_poly_vals[1] + hold_poly_vals[0] * time_count
 
+                    # calculate the decay time
                     decay = (hold_best_fit[-1] - hold_best_fit[0]) * 10
                     decays.append(decay)
 
+                    # get normalised decay
                     normalised_dacay = decay / centroid
                     all_decay.append(normalised_dacay)
 
-    mean_centroid = np.mean(all_centroid)
+    '''
+     Get mean values for parameters
+    '''
+    if all_centroid:
+        mean_centroid = np.mean(all_centroid)
+    else:
+        mean_centroid = 0.0
 
     if all_decay:
         mean_decay = np.mean(all_decay)
     else:
-        mean_decay = 0
+        mean_decay = 0.0
     if all_attack:
         mean_attack = np.mean(all_attack)
         if mean_attack > 0:
             mean_attack = np.log10(mean_attack)
     else:
-        mean_attack = 0
+        mean_attack = 0.0
     if all_spread:
         mean_spread = np.mean(all_spread)
     else:
-        mean_spread = 0
+        mean_spread = 0.0
 
-    ''' get the metallic probability from logistic regression model '''
+    ''' Implementation of a logistic regression model to calculate metallic probability '''
+    # regression coefficients
+    coefficients = [528.406157139, -0.237151712738, 0.000118653519107, 0.00170027628632, -1.08383115685]
 
-    coefficients = [526.535751395, -0.250940206187, 0.000119883204297, 0.00200764164341, -1.09688996753]
-    # coefficients if using spectral centroid
-    # coefficients = [129.539857931, -0.405972586334, 0.000197263145611, 0.00118344866937, 1.6049278962e-05,-1.70277588538]
-
+    # apply linear coefficients
     attributes = [mean_decay, mean_attack, mean_spread, roughness, 1.0]
-    # attributes = [mean_decay, mean_attack, mean_spread, roughness, mean_centroid, 1.0]
     logit_model = np.sum(np.array(coefficients) * np.array(attributes))
+
+    # apply inverse of Logit function to obtain probability
     probability = np.exp(logit_model) / (1.0 + np.exp(logit_model))
 
-    return mean_decay, mean_attack, mean_spread, roughness, mean_centroid, probability
-    # return probability
+    return probability
+    # maintained for testing and development of model
+    # return mean_decay, mean_attack, mean_spread, roughness, mean_centroid, probability
