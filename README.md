@@ -1,6 +1,16 @@
 # AudioCommons Timbral Models
 This project contains Python scripts developed for extracting timbral attributes of audio files.
 
+# Dependencies
+The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
+```
+$ pip install numpy
+$ pip install soundfile
+$ pip install librosa
+$ pip install scipy
+
+```
+
 # Using the models
 Currently, the models are written in a format so they can be imported into a Python script.  
 Each script may contain many methods, but the method which should be called is the `timbral_xxx(fname)` method.
