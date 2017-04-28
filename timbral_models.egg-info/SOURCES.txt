@@ -1,0 +1,15 @@
+setup.cfg
+setup.py
+timbral_models/Timbral_Brightness.py
+timbral_models/Timbral_Depth.py
+timbral_models/Timbral_Hardness.py
+timbral_models/Timbral_Metallic.py
+timbral_models/Timbral_Reverb.py
+timbral_models/Timbral_Roughness.py
+timbral_models/__init__.py
+timbral_models.egg-info/PKG-INFO
+timbral_models.egg-info/SOURCES.txt
+timbral_models.egg-info/dependency_links.txt
+timbral_models.egg-info/not-zip-safe
+timbral_models.egg-info/requires.txt
+timbral_models.egg-info/top_level.txt

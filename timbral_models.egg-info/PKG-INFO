@@ -1,0 +1,14 @@
+Metadata-Version: 1.1
+Name: timbral-models
+Version: 0.1
+Summary: Algorithms for predicting the timbral characteristics of audio files
+Home-page: https://github.com/AudioCommons/timbral_models
+Author: Andy Pearce
+Author-email: andy.pearce@surrey.ac.uk
+License: Apache Software
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 2 - Pre-Alpha
+Classifier: Topic :: Multimedia :: Sound/Audio :: Analysis
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 2.7
