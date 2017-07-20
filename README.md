@@ -3,8 +3,20 @@ This project contains Python scripts developed for extracting timbral attributes
 
 More detailed explanations of how the models function can be found in Deliverable D5.2: First prototype of timbral characterisation tools for semantically annotating non-musical content, available: http://www.audiocommons.org/materials/
 
+# Installing the package
+The timbral_models package can be installed using the pip command.  This will handle all dependencies.
+```
+pip install timbral_models
+```
+Note that during test installing the package with only basic python installed, an error occurred when installing dependencies.  This can be overcome by first installing numpy, followed by timbral_models.
+```
+pip install numpy
+pip install timbral_models
+```
+
+
 # Dependencies
-The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
+If the code is to be installed using a method other than pip, dependencies will need to be installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
 ```
 $ pip install numpy
 $ pip install soundfile
@@ -14,9 +26,9 @@ $ pip install scipy
 ```
 
 # Using the models
-Currently, the models are written in a format so they can be imported into a Python script.  
-Each script may contain many methods, but the method which should be called is the `timbral_xxx(fname)` method.
-To calculate the timbral attribute, give the method a string of the file name.  The method will then read in the audio file internally.
+The models are written as a package which can be imported into a Python script.  Within the package are six methods that predict the brightness, depth, hardness, metallic-nature, reverb, and roughness of an audio file.  These are named `timbral_xxx(fname)`, where `xxx` represents the timbral model.
+
+To calculate the timbral attribute, give the method a string of the file name.  The method will then read in the audio file internally and return the timbral characteristic, as described below.
 
 # Model output
 The *hardness*, *depth*, and *brightness* models predict subjective ratings of their respective attributes.  Each model returns a float.  These models were trained on subjective ratings ranging from 0 to 100, but can extend beyond this range.
@@ -30,11 +42,13 @@ The *reverb* model returns an approximation of the RT60 of an audio file in mill
 # Example usage
 
 ```
-import Timbral_Brightness as bright
+from timbral_models import timbral_brightness 
 
 # generic file location
 fname = '/Users/User/Music/AudioFileToTest.wav'
 
 # calculate brightness
-brightness = bright.timbral_brightness(fname) 
+brightness = timbral_brightness(fname) 
 ```
+
+

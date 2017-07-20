@@ -119,7 +119,13 @@ def return_loop(onset_loc, envelope, function_time_thresh, hist_threshold, hist_
                  The dynamic range is less than the threshold, therefore this is not a separate audio event.
                  Set current onset idx to minimum value and repeat.
                 '''
-                onset_loc = last_idx
+                if last_idx >= 512:
+                    onset_loc = last_idx
+                else:
+                    '''
+                     The hysteresis check puts the new threshold too close to the start
+                    '''
+                    return 0
 
 
 def get_attack_envelope(time_samples, fs, decay_time=0.2, hold_time=0.01):
@@ -211,6 +217,12 @@ def timbral_metallic(fname):
     if len(num_channels) > 1:
         audio_samples = audio_samples[:, 0]
 
+    # ensure even number of samples
+    if np.mod(len(audio_samples),2):
+        audio_samples = audio_samples[:-1]
+
+
+
     # normalise the audio
     audio_samples *= 1.0 / max(abs(audio_samples))
 
@@ -243,6 +255,11 @@ def timbral_metallic(fname):
     # normalise the attack envelope
     attack_env = attack_env / max(attack_env)
 
+    # calculate the onsets using librosa
+    onsets = librosa.onset.onset_detect(audio_samples, fs)
+    for i in range(len(onsets)):
+        onsets[i] += 1
+
     '''
      Zero-pad audio and envelopes with 512 samples 
     '''
@@ -253,8 +270,7 @@ def timbral_metallic(fname):
     logenvelope = np.log10(envelope+1.0)  # +1 to prevent log(0)
     logenvelope = logenvelope / max(logenvelope)  # re-normalise the envelope
 
-    # calculate the onsets using librosa
-    onsets = librosa.onset.onset_detect(audio_samples, fs)
+    onsets2 = librosa.onset.onset_detect(audio_samples, fs)
 
     '''
      Get correct onset locations and assess against the dynamic range
@@ -311,7 +327,7 @@ def timbral_metallic(fname):
             audio_segment = audio_samples[current_onset:corrected_onsets[count + 1]]
 
         # only if the segment is long enough
-        if len(attack_segment) > 1:
+        if len(attack_segment) > 1 and max(audio_segment) > 0:
             ''' 
              Calculate attack time
             '''
@@ -424,7 +440,8 @@ def timbral_metallic(fname):
 
     ''' Implementation of a logistic regression model to calculate metallic probability '''
     # regression coefficients
-    coefficients = [528.406157139, -0.237151712738, 0.000118653519107, 0.00170027628632, -1.08383115685]
+    # coefficients = [527.817922795, -0.237036916224, 0.000120510906074, 0.00168558574401, -1.08959132167]
+    coefficients = [141.175896015, -0.131026806112, 0.000191222265236, 0.0010416017833, -1.13790861012]
 
     # apply linear coefficients
     attributes = [mean_decay, mean_attack, mean_spread, roughness, 1.0]

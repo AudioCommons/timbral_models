@@ -76,7 +76,7 @@ def timbral_reverb(fname):
       Get a spectrogram of the signal
     '''
     # normalise audio
-    audio_samples *= (1.0 / max(audio_samples))
+    audio_samples *= (1.0 / max(abs(audio_samples)))
     nfft = 2048
     hop_size = nfft / 4
     freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft,
@@ -121,7 +121,7 @@ def timbral_reverb(fname):
                     # can we increase the decay length?
                     decrease = True
                     new_Llim = Llim_var + 1
-                    while decrease and (start_idx+Llim_var) <= len(spec[0, :]):
+                    while decrease and (start_idx+new_Llim) <= len(spec[0, :]):
                         new_evaluation_segment = spec[freq_bin, start_idx:start_idx+new_Llim]
                         if strictly_decreasing(new_evaluation_segment):
                             L_values[i] += 1

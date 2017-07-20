@@ -87,7 +87,13 @@ def return_loop(onset_loc, envelope, function_time_thresh, hist_threshold, hist_
                  The dynamic range is less than the threshold, therefore this is not a separate audio event.
                  Set current onset idx to minimum value and repeat.
                 '''
-                onset_loc = last_idx
+                if last_idx >= 512:
+                    onset_loc = last_idx
+                else:
+                    '''
+                     The hysteresis check puts the new threshold too close to the start
+                    '''
+                    return 0
 
 
 def timbral_hardness(fname):
@@ -335,7 +341,7 @@ def timbral_hardness(fname):
             if (centroid_int_samples + th_start_idx) <= len(segment):
                 post_attack_segment = audio_segment[int(th_start_idx):int(th_start_idx + centroid_int_samples)]
             else:
-                post_attack_segment = audio_samples[int(th_start_idx):len(segment)]
+                post_attack_segment = audio_segment[int(th_start_idx):len(segment)]
 
             attack_spectrum = np.fft.fft(post_attack_segment)
             attack_spectrum = abs(attack_spectrum[:int(len(attack_spectrum) / 2)])  # take the real half od the spectrum
@@ -366,8 +372,8 @@ def timbral_hardness(fname):
     all_metrics[5] = np.array(mean_attack_gradient) * np.array(mean_attack_centroid)
     all_metrics[6] = np.array(mean_attack_time) * np.array(mean_attack_gradient) * np.array(mean_attack_centroid)
 
-    coefficients = np.array([-367.825120662, -3337.86806786, 432.934655169, -628.173834828, 105.07915434,
-                             1008.30167456, 191.819736608, -1427.29046921])
+    coefficients = np.array([-365.232930949, -3276.19905108, 426.807386961, -624.176789287, 104.143569144,
+                             988.622652051, 189.821027679, -1407.5701818])
 
     hardness = np.sum(all_metrics * coefficients)
 
