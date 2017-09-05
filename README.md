@@ -3,7 +3,7 @@ This project contains Python scripts developed for extracting timbral attributes
 
 More detailed explanations of how the models function can be found in Deliverable D5.2: First prototype of timbral characterisation tools for semantically annotating non-musical content, available: http://www.audiocommons.org/materials/
 
-<<<<<<< HEAD
+
 # Installing the package
 The timbral_models package can be installed using the pip command.  This will handle all dependencies.
 ```
@@ -21,7 +21,6 @@ If the code is to be installed using a method other than pip, dependencies will 
 =======
 # Dependencies
 The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
->>>>>>> 7eb3aefbc6d4d37e1b48d970a18cc397ed24ac30
 ```
 $ pip install numpy
 $ pip install soundfile
