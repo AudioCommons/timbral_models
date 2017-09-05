@@ -31,14 +31,6 @@ The models are written as a package which can be imported into a Python script. 
 
 To calculate the timbral attribute, give the method a string of the file name.  The method will then read in the audio file internally and return the timbral characteristic, as described below.
 
-# Model output
-The *hardness*, *depth*, and *brightness* models predict subjective ratings of their respective attributes.  Each model returns a float.  These models were trained on subjective ratings ranging from 0 to 100, but can extend beyond this range.
-
-The *metalic-nature* model returns the probability of an audio file sounding metallic as a float ranging from 0.0 to 1.0.
-
-The *roughness* model returns a float representing the roughness of the audio file.  The minimum roughness value is 0.0, but there is no upper limit on the maximum roughness value.
-
-The *reverb* model returns an approximation of the RT60 of an audio file in milliseconds. If the algorithm cannot estimate an RT60, 0 is returned.  
 
 # Model output
 The *hardness*, *depth*, and *brightness* models predict subjective ratings of their respective attributes.  Each model returns a float.  These models were trained on subjective ratings ranging from 0 to 100, but can extend beyond this range.
@@ -62,3 +54,9 @@ brightness = timbral_brightness(fname)
 ```
 
 
+# Version History
+This section documents the version history of the timbral models.  To download a specific version of the model that relate to a specific deliverable, please check this section and download the most recent version from that date.
+
+2017/09/05 - Version 0.1 of timbral models, relates to Audio Commons Deliverable D5.3.  This version of the repository relates to the software version 0.1 on PyPI. 
+
+2017/04/27 - Version 0.0 of the timbral models, relates to Audio Commons Deliverable D5.2. 
