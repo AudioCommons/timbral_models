@@ -18,9 +18,6 @@ pip install timbral_models
 
 # Dependencies
 If the code is to be installed using a method other than pip, dependencies will need to be installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
-=======
-# Dependencies
-The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
 ```
 $ pip install numpy
 $ pip install soundfile
