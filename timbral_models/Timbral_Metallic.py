@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.signal import hilbert, butter, lfilter
-import Timbral_Roughness as rough
+from Timbral_Roughness import timbral_roughness
 import soundfile as sf
 import librosa
 
@@ -227,7 +227,7 @@ def timbral_metallic(fname):
     audio_samples *= 1.0 / max(abs(audio_samples))
 
     # calculate the roughness of the audio file
-    roughness = rough.timbral_roughness(fname)
+    roughness = timbral_roughness(fname)
 
     '''
      Get the envelope of the audio file using the Hilbert transform and filtering method
