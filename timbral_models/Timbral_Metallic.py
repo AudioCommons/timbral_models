@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.signal import hilbert, butter, lfilter
-from Timbral_Roughness import timbral_roughness
+from .Timbral_Roughness import timbral_roughness
 import soundfile as sf
 import librosa
 
