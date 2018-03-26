@@ -69,7 +69,7 @@ def calcCrossoverIDX(fls, crossover_freq):
     return crossover_idx
 
 
-def timbral_brightness(fname):
+def timbral_brightness(fname, threshold=0, crossover=3000, stepSize=1024, blockSize=2048, n_oct=2, minFreq=20):
     """ The main process block where computations are completed with VAMP.
      Data is accepted in the time domain, where a Hamming window is applied,
      and the FFT of this data taken.  The magnitude spectrum is then smoothed
@@ -86,14 +86,8 @@ def timbral_brightness(fname):
         audio_samples = audio_samples[:, 0]
 
     # initialise default settings
-    stepSize = 1024
-    blockSize = 2048
-    threshold = 0
-    n_oct = 2
     centroid_list = []
-    crossover = 3000
     crossover_idx = 0
-    minFreq = 20
     mag_hi_list = []
     mag_all_list = []
     updated = False
@@ -104,7 +98,7 @@ def timbral_brightness(fname):
     while (i + blockSize) < len(audio_samples):
         eval_audio = audio_samples[i:i + blockSize]
         complex_spectrum = np.fft.fft(eval_audio * window)
-        magnitude_spectrum = np.absolute(complex_spectrum[0:1 + len(complex_spectrum) / 2])
+        magnitude_spectrum = np.absolute(complex_spectrum[0:1 + int(len(complex_spectrum) / 2)])
 
         if sum(magnitude_spectrum) > 0:
 

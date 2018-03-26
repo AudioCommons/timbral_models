@@ -500,6 +500,7 @@ def calculate_onsets(audio_samples, envelope_samples, fs, look_back_time=20, hys
 
         strength_onset_times = np.array(corrected_onsets) / 512
         strength_onset_times.clip(min=0)
+        strength_onset_times.astype('int')
 
         corrected_original_onsets = []
         corrected_strength_onsets = []
