@@ -37,7 +37,7 @@ def return_loop(onset_loc, envelope, function_time_thresh, hist_threshold, hist_
         # get the current sample value
         current_sample = envelope[int(onset_loc)]
         # get the previous 10ms worth of samples
-        if onset_loc - function_time_thresh >= 0:
+        if onset_loc - function_time_thresh > 0:
             evaluation_array = envelope[onset_loc - function_time_thresh - 1:onset_loc]
         else:
             evaluation_array = envelope[:onset_loc - 1]
