@@ -498,9 +498,9 @@ def calculate_onsets(audio_samples, envelope_samples, fs, look_back_time=20, hys
         # get the onset strength
         onset_strength = librosa.onset.onset_strength(audio_samples, fs)
 
-        strength_onset_times = np.array(corrected_onsets) / 512
+        strength_onset_times = np.array(corrected_onsets) // 512
         strength_onset_times.clip(min=0)
-        strength_onset_times.astype('int')
+        
 
         corrected_original_onsets = []
         corrected_strength_onsets = []
@@ -659,7 +659,7 @@ def timbral_hardness(fname, dev_output=False, max_attack_time=0.3, bandwidth_thr
     if original_onsets:
         onsets = np.array(original_onsets) - nperseg
         onsets[onsets < 0] = 0
-        bandwidth_onset = np.array(onsets) / 32 # overlap_step=32
+        bandwidth_onset = np.array(onsets) // 32 # overlap_step=32
 
         for onset_count in range(len(bandwidth_onset)):
             onset = bandwidth_onset[onset_count]
@@ -710,10 +710,10 @@ def timbral_hardness(fname, dev_output=False, max_attack_time=0.3, bandwidth_thr
             onset = original_onsets[onset_count]
             if onset == original_onsets[-1]:
                 attack_seg = np.array(envelope[onset:])
-                strength_seg = np.array(onset_strength[(onset/512):])
+                strength_seg = np.array(onset_strength[(onset // 512):])
             else:
                 attack_seg = np.array(envelope[onset:original_onsets[onset_count + 1]])
-                strength_seg = np.array(onset_strength[(onset / 512):(original_onsets[onset_count+1] / 512)])
+                strength_seg = np.array(onset_strength[(onset // 512):(original_onsets[onset_count+1] // 512)])
 
             attack_time = calculate_attack_time(attack_seg, fs, max_attack_time=max_attack_time)
             all_attack_time.append(attack_time[0])
