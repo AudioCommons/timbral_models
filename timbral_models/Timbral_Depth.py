@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 import soundfile as sf
 from scipy.signal import spectrogram
@@ -8,370 +9,241 @@ import timbral_util
 import scipy.stats
 
 
-def db2mag(dB):
-    mag = 10 ** (dB / 20.0)
-    return mag
-
-
-def timbral_depth(fname, dev_output=False, threshold_db=-60, low_frequency_limit=30, crossover_frequency=200,
-                  phase_correction=False, weighting='None'):
-
-
+def timbral_depth(fname, dev_output=False, threshold_db=-60, low_frequency_limit=20, centroid_crossover_frequency=2000,
+                  ratio_crossover_frequency=500, phase_correction=False, db_decay_threshold=-40):
     """
      This function calculates the apparent Depth of an audio file.
-     Currently the function only works on the left channel of multi-channel audio files.
 
-     The function calculates 3 parameters: the spectral centroid of low frequencies, ratio of low-frequency
-     to all energy, and the roll-on frequency.
+     Version 0.2
 
-      Spectral centroid:    The spectral centroid is calculated for frequencies between 30 and 200 Hz.  A window
-                            size of 4096 is used to obtain higher low-frequency resolution, and a 1024 samples hop
-                            size to maintain time resolution.
+     Required parameters
+    :param fname:                           Audio filename to be analysed, including full file path and extension.
 
-      Ratio:                Calculates the ratio fo magnitude between 30 to 200 Hz compared with magnitude between
-                            30 Hz and Nyquist.
+    Optional parameters
+    :param dev_output:                      Bool, when False return the depth, when True return all extracted
+                                            features.
+    :param threshold_db:                    Threshold, in dB, for calculating centroids.
+    :param low_frequency_limit:             Low frequency limit at which to highpass filter the audio.
+    :param centroid_crossover_frequency:    Crossover frequency for calculating the spectral centroid.
+    :param ratio_crossover_frequency:       Crossover frequency for calculating the ratio.
+    :param phase_correction:                Perform phase checking before summing to mono.
+    :param db_decay_threshold:              Threshold, in dB, for estimating duration.
 
-      Roll-on frequency:    This calculates the frequency where 95% of energy lies above this frequency.
-
-      Depth:                The depth is calculated by applying the coefficients obtained from a linear regression
-                            model, which are hardcoded into this function.
-
-      :param fname: Audio filename to be analysed, including full file path and extension.
-      :return: returns the depth as a float representing the relative depth.
+    :return:                                Aparent depth of audio file, float.
     """
     # use pysoundfile to read audio
     audio_samples, fs = sf.read(fname, always_2d=False)
 
+    # reduce to mono
+    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
 
-    # take left channel
+    # highpass audio - running 3 times for -18dB per octave
+    audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
+    audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
+    audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
 
-    num_channels = np.shape(audio_samples)
-    if len(num_channels) > 1:
-        # take just the left channel
-        audio_samples = audio_samples[:, 0]
+    # running 3 times to get -18dB per octave rolloff, greater than second order filters are unstable in python
+    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(audio_samples,
+                                                                       crossover=centroid_crossover_frequency, fs=fs)
+    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(lowpass_centroid_audio_samples,
+                                                                       crossover=centroid_crossover_frequency, fs=fs)
+    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(lowpass_centroid_audio_samples,
+                                                                       crossover=centroid_crossover_frequency, fs=fs)
 
-    if weighting != 'None':
-        audio_samples = pyfilterbank.splweighting.weight_signal(audio_samples, fs, weighting)
-
-    envelope = timbral_util.sample_and_hold_envelope_calculation(audio_samples, fs)
-    onsets = timbral_util.calculate_onsets(audio_samples, envelope, fs)
-
-
-
-    '''
-      pre normalising values
-    '''
-    # set FFT parameters
-    nfft = 4096
-    hop_size = 3 * nfft / 4
-    # get spectrogram
-    freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft,
-                                   hop_size, nfft, 'constant', True, 'spectrum')
-
-
+    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(audio_samples,
+                                                                    crossover=ratio_crossover_frequency, fs=fs)
+    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(lowpass_ratio_audio_samples,
+                                                                    crossover=ratio_crossover_frequency, fs=fs)
+    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(lowpass_ratio_audio_samples,
+                                                                    crossover=ratio_crossover_frequency, fs=fs)
 
 
     '''
-        1) segment audio file
-        2) identify decay start
-        3) estimate time-domain decay time
-        4) estimate LF/HF decay time
-    '''
-    # get essentia StrongDecay
-    es_array = essentia.array(audio_samples)
-    strong_decay = float(es.StrongDecay()(es_array))
-
-
-
-
-
-
-
-
-
-
-
-    '''
-      get the overall spectral metrics
-    '''
-    # get overall spectral metrics
-    all_spectrum = np.sum(spec, axis=1)
-    fls = freq
-
-    log_spectrum = 20 * np.log10(all_spectrum)
-    log_spectrum += (0 - max(log_spectrum))
-    shifted_log_spectrum = log_spectrum + abs(min(log_spectrum))
-    # get spectral metrics
-    SC = np.sum(fls * all_spectrum) / float(np.sum(all_spectrum))
-    flogSC = 10 ** (np.sum(np.log10(fls[1:]) * all_spectrum[1:]) / float(np.sum(all_spectrum[1:])))
-    logSC = np.sum(fls * shifted_log_spectrum) / float(np.sum(shifted_log_spectrum))
-    floglogSC = 10 ** (np.sum(np.log10(fls[1:]) * shifted_log_spectrum[1:]) / float(np.sum(shifted_log_spectrum[1:])))
-    fls_count = 1
-    log_tpower_thresh = 0.05 * np.sum(shifted_log_spectrum)
-    lin_tpower_thresh = 0.05 * np.sum(all_spectrum)
-    log_tpower = shifted_log_spectrum[0]
-    lin_tpower = all_spectrum[0]
-
-    while log_tpower < log_tpower_thresh:
-        fls_count += 1
-        log_tpower = np.sum(shifted_log_spectrum[:fls_count])
-
-    log_rollon = float(fls[fls_count])
-
-    fls_count = 1
-    while lin_tpower < lin_tpower_thresh:
-        fls_count += 1
-        lin_tpower = np.sum(all_spectrum[:fls_count])
-
-    lin_rollon = float(fls[fls_count])
-
-
-
-
-
-
-
-
-
-
-
-
-
-    '''
-      get frame based spectral metrics
-    '''
-
-    # get the index for the low-frequency limit, 30 Hz
-    low_limit_idx = np.argmax(freq >= 30)
-
-    # get the index for the cross-over frequency, 200 Hz
-    crossover_idx = np.argmax(freq >= 200)
-
-    # set threshold for ignoring time segments with no noise, selected from the training stimuli
-<<<<<<< Updated upstream
-    threshold = 0.005 ** 2
-=======
-    threshold = db2mag(threshold_db)  # 0.005 ** 2
->>>>>>> Stashed changes
-
-    # define arrays for storing metrics
-    all_lower_centroid = []
-    all_lower_ratio = []
-    all_rollon = []
-<<<<<<< Updated upstream
-=======
-    all_thx_rollon = []
-    all_lowpower = []
-    all_thx_lowpower = []
-    all_tpower = []
->>>>>>> Stashed changes
-
-    # get metrics for each time segment of the spectrogram
-    for idx in range(1, len(time)):
-        current_spectrum = spec[low_limit_idx:, idx]
-        tpower = np.sum(current_spectrum)
-
-        # estimate if time segment contains audio energy or just noise
-        if tpower > threshold:
-            # calculate the spectral centroid and ratio
-            lower_spectrum = spec[low_limit_idx:crossover_idx, idx]
-            lower_fls = freq[low_limit_idx:crossover_idx]
-            lower_power = np.sum(lower_spectrum)
-<<<<<<< Updated upstream
-=======
-            all_thx_lowpower.append(lower_power)
-            all_lowpower.append(lower_power)
->>>>>>> Stashed changes
-
-            lower_centroid = np.sum(lower_spectrum * lower_fls) / float(lower_power)
-            lower_ratio = lower_power / float(tpower)
-
-            # calculate the roll-on frequency
-            cumulative_spectral_power = current_spectrum[0]
-            counter = 0
-            rollon_threshold = tpower * 0.05
-            while cumulative_spectral_power < rollon_threshold:
-                counter += 1
-                cumulative_spectral_power = np.sum(current_spectrum[:counter])
-
-            rollon = freq[counter + low_limit_idx]
-
-            all_lower_centroid.append(lower_centroid)
-            all_lower_ratio.append(lower_ratio)
-            all_rollon.append(rollon)
-
-            # print all_lower_centroid
-
-        else:
-            all_lower_centroid.append(0)
-            all_lower_ratio.append(0)
-            all_rollon.append(0)
-
-    '''
-      get normalised values
+      Get spectrograms and normalise
     '''
     # normalise audio
+    lowpass_ratio_audio_samples *= (1.0 / max(abs(audio_samples)))
+    lowpass_centroid_audio_samples *= (1.0 / max(abs(audio_samples)))
     audio_samples *= (1.0 / max(abs(audio_samples)))
 
     # set FFT parameters
     nfft = 4096
     hop_size = 3 * nfft / 4
     # get spectrogram
-    freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft,
-                                   hop_size, nfft, 'constant', True, 'spectrum')
+    freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft, hop_size, nfft, 'constant', True, 'spectrum')
+    lp_centroid_freq, lp_centroid_time, lp_centroid_spec = spectrogram(lowpass_centroid_audio_samples, fs, 'hamming',
+                                                                       nfft, hop_size, nfft, 'constant', True,
+                                                                       'spectrum')
+    lp_ratio_freq, lp_ratio_time, lp_ratio_spec = spectrogram(lowpass_ratio_audio_samples, fs, 'hamming', nfft,
+                                                              hop_size, nfft, 'constant', True, 'spectrum')
 
-    # get the index for the low-frequency limit, 30 Hz
-    low_limit_idx = np.argmax(freq >= low_frequency_limit)
-
-    # get the index for the cross-over frequency, 200 Hz
-    crossover_idx = np.argmax(freq >= crossover_frequency)
-
-    # set threshold for ignoring time segments with no noise, selected from the training stimuli
-    threshold = db2mag(threshold_db) # 0.005 ** 2
+    threshold = timbral_util.db2mag(threshold_db)
 
 
+    '''
+      METRIC 1 - limited weighted mean normalised lower centroid
+    '''
     # define arrays for storing metrics
     all_normalised_lower_centroid = []
-    all_normalised_thx_lower_centroid = []
-    all_normalised_lower_ratio = []
-    all_normalised_thx_lower_ratio = []
-    all_normalised_rollon = []
-    all_normalised_thx_rollon = []
-    all_normalised_lowpower = []
-    all_normalised_thx_lowpower = []
-    all_normalised_tpower = []
-    all_centroid = []
-
+    all_normalised_centroid_tpower = []
 
     # get metrics for each time segment of the spectrogram
     for idx in range(1, len(time)):
-        current_spectrum = spec[low_limit_idx:, idx]
+        # get overall spectrum of time frame
+        current_spectrum = spec[:, idx]
+        # calculate time window power
         tpower = np.sum(current_spectrum)
-        all_normalised_tpower.append(tpower)
+        all_normalised_centroid_tpower.append(tpower)
 
         # estimate if time segment contains audio energy or just noise
         if tpower > threshold:
-            # calculate the spectral centroid and ratio
-            all_freq = freq[low_limit_idx:]
-            centroid = np.sum(current_spectrum * all_freq) / tpower
-            all_centroid.append(centroid)
-            lower_spectrum = spec[low_limit_idx:crossover_idx, idx]
-            lower_fls = freq[low_limit_idx:crossover_idx]
+            # get the spectrum
+            lower_spectrum = lp_centroid_spec[:, idx]
             lower_power = np.sum(lower_spectrum)
-            all_normalised_thx_lowpower.append(lower_power)
-            all_normalised_lowpower.append(lower_power)
 
+            # get lower centroid
+            lower_centroid = np.sum(lower_spectrum * lp_centroid_freq) / float(lower_power)
 
-            lower_centroid = np.sum(lower_spectrum * lower_fls) / float(lower_power)
-            lower_ratio = lower_power / float(tpower)
-
-            # calculate the roll-on frequency
-            cumulative_spectral_power = current_spectrum[0]
-            counter = 0
-            rollon_threshold = tpower * 0.05
-            while cumulative_spectral_power < rollon_threshold:
-                counter += 1
-                cumulative_spectral_power = np.sum(current_spectrum[:counter])
-
-            rollon = freq[counter + low_limit_idx]
-
+            # append to list
             all_normalised_lower_centroid.append(lower_centroid)
-            all_normalised_thx_lower_centroid.append(lower_centroid)
-            all_normalised_lower_ratio.append(lower_ratio)
-            all_normalised_thx_lower_ratio.append(lower_ratio)
-            all_normalised_rollon.append(rollon)
-            all_normalised_thx_rollon.append(rollon)
-
-            # print all_lower_centroid
-
         else:
             all_normalised_lower_centroid.append(0)
-            all_normalised_lower_ratio.append(0)
-            all_normalised_rollon.append(0)
-            all_normalised_thx_lowpower.append(0)
-            all_centroid.append(0)
 
-            lower_spectrum = spec[low_limit_idx:crossover_idx, idx]
-            lower_power = np.sum(lower_spectrum)
-            all_normalised_lowpower.append(lower_power)
-
-
-    # get mean values
-    mean_lower_centroid = np.mean(all_lower_centroid)
-    mean_lower_ratio = np.mean(all_lower_ratio)
-    mean_rollon = np.mean(all_rollon)
-<<<<<<< Updated upstream
-=======
-    mean_lowpower = np.mean(all_lowpower)
-    mean_thx_lower_centroid = np.mean(all_thx_lower_centroid)
-    mean_thx_lower_ratio = np.mean(all_thx_lower_ratio)
-    mean_thx_rollon = np.mean(all_thx_rollon)
-    mean_thx_lowpower = np.mean(all_thx_lowpower)
-    weighted_mean_lower_centroid = np.average(all_lower_centroid, weights=all_tpower)
-    weighted_mean_lower_ratio = np.average(all_lower_ratio, weights=all_tpower)
-    weighted_mean_rollon = np.average(all_rollon, weights=all_tpower)
-    weighted_mean_lowpower = np.average(all_lowpower, weights=all_tpower)
-
-    mean_normalised_lower_centroid = np.mean(all_normalised_lower_centroid)
-    mean_normalised_lower_ratio = np.mean(all_normalised_lower_ratio)
-    mean_normalised_rollon = np.mean(all_normalised_rollon)
-    mean_normalised_lowpower = np.mean(all_normalised_lowpower)
-    mean_normalised_thx_lower_centroid = np.mean(all_normalised_thx_lower_centroid)
-    mean_normalised_thx_lower_ratio = np.mean(all_normalised_thx_lower_ratio)
-    mean_normalised_thx_rollon = np.mean(all_normalised_thx_rollon)
-    mean_normalised_thx_lowpower = np.mean(all_normalised_thx_lowpower)
-    weighted_mean_normalised_lower_centroid = np.average(all_normalised_lower_centroid, weights=all_normalised_tpower)
-    weighted_mean_normalised_lower_ratio = np.average(all_normalised_lower_ratio, weights=all_normalised_tpower)
-    weighted_mean_normalised_rollon = np.average(all_normalised_rollon, weights=all_normalised_tpower)
-    weighted_mean_normalised_lowpower = np.average(all_normalised_lowpower, weights=all_normalised_tpower)
-
-    mean_centroid = np.mean(centroid)
-    weighted_mean_centroid = np.average(all_centroid, weights=all_tpower)
-
->>>>>>> Stashed changes
-
-    '''
-     Perform linear regression to obtain depth
-    '''
-    # coefficients from linear regression
-    coefficients = np.array([-0.0370864447684, 152.569714872, -0.0577703172507, -1.83339263537, 0.000716827172454,
-                             -0.156630837052, 0.0133395675543, 10.8565562292])
-
-    # pack metrics into a matrix
-    all_metrics = np.zeros(8)
-
-    all_metrics[0] = mean_lower_centroid
-    all_metrics[1] = mean_lower_ratio
-    all_metrics[2] = mean_rollon
-    all_metrics[3] = np.array(mean_lower_centroid) * np.array(mean_lower_ratio)
-    all_metrics[4] = np.array(mean_lower_centroid) * np.array(mean_rollon)
-    all_metrics[5] = np.array(mean_lower_ratio) * np.array(mean_rollon)
-    all_metrics[6] = np.array(mean_lower_centroid) * np.array(mean_lower_ratio) * np.array(mean_rollon)
-    all_metrics[7] = 1.0
-
-    # perform linear regression
-    depth = np.sum(all_metrics * coefficients)
-
-    # this return is maintained for testing in the future
-<<<<<<< Updated upstream
-    # return mean_lower_centroid, mean_lower_ratio, mean_rollon, depth
-    return depth
-=======
-    if dev_output:
-        return mean_lower_centroid, mean_lower_ratio, mean_rollon, \
-               mean_thx_lower_centroid, mean_thx_lower_ratio, mean_thx_rollon, \
-               weighted_mean_lower_centroid, weighted_mean_lower_ratio, weighted_mean_rollon, \
-               mean_lowpower, mean_thx_lowpower, weighted_mean_lowpower, \
-               mean_normalised_lower_centroid, mean_normalised_lower_ratio, mean_normalised_rollon, \
-               mean_normalised_lowpower, mean_normalised_thx_lower_centroid, mean_normalised_thx_lower_ratio, \
-               mean_normalised_thx_rollon, mean_normalised_thx_lowpower, weighted_mean_normalised_lower_centroid, \
-               weighted_mean_normalised_lower_ratio, weighted_mean_normalised_rollon, \
-               weighted_mean_normalised_lowpower, mean_centroid, weighted_mean_centroid, \
-               SC, flogSC, logSC, floglogSC, log_rollon, lin_rollon, strong_decay
-
-
-        # mean_lower_centroid, mean_lower_ratio, mean_rollon, depth
+    # calculate the weighted mean of lower centroids
+    weighted_mean_normalised_lower_centroid = np.average(all_normalised_lower_centroid,
+                                                         weights=all_normalised_centroid_tpower)
+    # limit to the centroid crossover frequency
+    if weighted_mean_normalised_lower_centroid > centroid_crossover_frequency:
+        limited_weighted_mean_normalised_lower_centroid = np.float64(centroid_crossover_frequency)
     else:
+        limited_weighted_mean_normalised_lower_centroid = weighted_mean_normalised_lower_centroid
+
+
+
+    '''
+     METRIC 2 - weighted mean normalised lower ratio
+    '''
+    # define arrays for storing metrics
+    all_normalised_lower_ratio = []
+    all_normalised_ratio_tpower = []
+
+    # get metrics for each time segment of the spectrogram
+    for idx in range(1, len(time)):
+        # get time frame of broadband spectrum
+        current_spectrum = spec[:, idx]
+        tpower = np.sum(current_spectrum)
+        all_normalised_ratio_tpower.append(tpower)
+
+        # estimate if time segment contains audio energy or just noise
+        if tpower > threshold:
+            # get the lowpass spectrum
+            lower_spectrum = lp_ratio_spec[:, idx]
+            # get the power of this
+            lower_power = np.sum(lower_spectrum)
+            # get the ratio of LF to all energy
+            lower_ratio = lower_power / float(tpower)
+            # append to array
+            all_normalised_lower_ratio.append(lower_ratio)
+        else:
+            all_normalised_lower_ratio.append(0)
+
+    # calculate
+    weighted_mean_normalised_lower_ratio = np.average(all_normalised_lower_ratio, weights=all_normalised_ratio_tpower)
+
+    '''
+      METRIC 3 - Approximate duration/decay-time of sample 
+    '''
+    all_my_duration = []
+
+    # get envelpe of signal
+    envelope = timbral_util.sample_and_hold_envelope_calculation(audio_samples, fs)
+    # estimate onsets
+    onsets = timbral_util.calculate_onsets(audio_samples, envelope, fs)
+
+    # get RMS envelope - better follows decays than the sample-and-hold
+    rms_step_size = 256
+    rms_envelope = timbral_util.calculate_rms_enveope(audio_samples, step_size=rms_step_size)
+
+    # convert decay threshold to magnitude
+    decay_threshold = timbral_util.db2mag(db_decay_threshold)
+    # rescale onsets to rms stepsize - casting to int
+    time_convert = fs / float(rms_step_size)
+    onsets = (np.array(onsets) / float(rms_step_size)).astype('int')
+
+    for idx, onset in enumerate(onsets):
+        if onset == onsets[-1]:
+            segment = rms_envelope[onset:]
+        else:
+            segment = rms_envelope[onset:onsets[idx + 1]]
+
+        # get location of max RMS frame
+        max_idx = np.argmax(segment)
+        # get the segment from this max until the next onset
+        post_max_segment = segment[max_idx:]
+
+        # estimate duration based on decay or until next onset
+        if min(post_max_segment) >= decay_threshold:
+            my_duration = len(post_max_segment) / time_convert
+        else:
+            my_duration = np.where(post_max_segment < decay_threshold)[0][0] / time_convert
+
+        # append to array
+        all_my_duration.append(my_duration)
+
+    # calculate the lof of mean duration
+    mean_my_duration = np.log10(np.mean(all_my_duration))
+
+
+    '''
+      METRIC 4 - f0 estimation with peak picking
+    '''
+    # get the overall spectrum
+    all_spectrum = np.sum(spec, axis=1)
+    # normalise this
+    norm_spec = (all_spectrum - np.min(all_spectrum)) / (np.max(all_spectrum) - np.min(all_spectrum))
+    # set limit for peak picking
+    cthr = 0.01
+    # detect peaks
+    peak_idx, peak_value, peak_freq = timbral_util.detect_peaks(norm_spec, cthr=cthr, unprocessed_array=norm_spec,
+                                                                freq=freq)
+    # estimate peak
+    pitch_estimate = np.log10(min(peak_freq)) if peak_freq[0] > 0 else 0
+
+
+    # get outputs
+    if dev_output:
+        return limited_weighted_mean_normalised_lower_centroid, weighted_mean_normalised_lower_ratio, mean_my_duration, \
+               pitch_estimate, weighted_mean_normalised_lower_ratio * mean_my_duration, \
+               timbral_util.sigmoid(weighted_mean_normalised_lower_ratio) * mean_my_duration
+    else:
+        '''
+         Perform linear regression to obtain depth
+        '''
+        # coefficients from linear regression
+        coefficients = np.array([-0.0043703565847874465, 32.83743202462131, 4.750862716905235, -14.217438690256062,
+                                 3.8782339862813924, -0.8544826091735516, 66.69534393444391])
+
+        # what are the best metrics
+        metric1 = limited_weighted_mean_normalised_lower_centroid
+        metric2 = weighted_mean_normalised_lower_ratio
+        metric3 = mean_my_duration
+        metric4 = pitch_estimate
+        metric5 = metric2 * metric3
+        metric6 = timbral_util.sigmoid(metric2) * metric3
+
+        # pack metrics into a matrix
+        all_metrics = np.zeros(7)
+
+        all_metrics[0] = metric1
+        all_metrics[1] = metric2
+        all_metrics[2] = metric3
+        all_metrics[3] = metric4
+        all_metrics[4] = metric5
+        all_metrics[5] = metric6
+        all_metrics[6] = 1.0
+
+        # perform linear regression
+        depth = np.sum(all_metrics * coefficients)
+
         return depth
 
->>>>>>> Stashed changes

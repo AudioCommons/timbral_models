@@ -1,154 +1,132 @@
+from __future__ import division
 import numpy as np
 import soundfile as sf
+import timbral_util
+from scipy.signal import spectrogram
 
 
-def calcFrequencyScale(spectrum_length, fs, blockSize):
-    """ calculate frequency scale """
-    freq = np.array(range(0, spectrum_length)) * fs / float(blockSize)
-    return freq
-
-
-def calcLowFrequencyLimit(fls, noct, max_idx):
-    """ Calculates an array containing the indexes of lower frequency
-    bounds for the spectral smoothing. """
-    # floats required due to integer division in Python 2.7
-    f_lower = fls[0:max_idx] / (2.0 ** (1 / (2.0 * noct)))
-    step_size = fls[1] - fls[0]
-    approx_idx = f_lower / (1.0 * step_size)
-    f_lower = np.round(approx_idx).astype(int)
-    return f_lower
-
-
-def calcUpperFrequencyLimit(fls, noct, max_idx):
-    """ calculate an array containing the indexes of upper frequency
-    bounds for the spectral smoothing. """
-    # floats required due to integer division in Python 2.7
-    f_upper = fls[0:max_idx] * (2.0 ** (1.0 / (2.0 * noct)))
-    step_size = fls[1] - fls[0]
-    approx_idx = f_upper / float(step_size)
-    f_upper = np.round(approx_idx).astype(int)
-    return f_upper
-
-
-def calcMaxIDX(fls, noct):
-    """ calculates the max index of the frequency scale with respect
-    to the level of smoothing applied.  This ensures that only
-    frequencies below the Nyquist limit are used for smoothing """
-    freq_l = fls[-1] / (2.0 ** (1 / (2.0 * noct)))
-    max_idx = np.array(abs(fls - freq_l)).argmin()
-    return max_idx
-
-
-def calcMinIDX(fls, minFreq):
-    """ calculates the index of the minimum frequency used for
-    smoothing.  This ensures that frequencies below the lower
-    limit are not considered.  """
-    min_idx = np.argmax(fls >= minFreq)
-    return min_idx
-
-
-def spectralSmoothing(spectrum, f_upper, f_lower):
-    """ Performs the spectral smoothing on a step-by-step basis.
-    For each valid frequency bin, the magnitude is averaged over
-    1/Noct below and above the centre frequency.
+def timbral_brightness(fname, dev_output=False, phase_correction=False, threshold=0, ratio_crossover=2000,
+                       centroid_crossover=100, stepSize=1024, blockSize=2048, minFreq=20):
     """
-    smoothed_array = np.zeros(len(f_upper))
-    for i in range(len(smoothed_array)):
-        # if statement is required since clever indexing isn't that clever.
-        if f_upper[i] == f_lower[i]:
-            smoothed_array[i] = spectrum[f_lower[i]]
-        else:
-            smooth_values = spectrum[f_lower[i]:(f_upper[i] + 1)]
-            smoothed_array[i] = np.mean(smooth_values)
-    return smoothed_array
+      This function calculates the apparent Brightness of an audio file.
 
+      Version 0.2
 
-def calcCrossoverIDX(fls, crossover_freq):
-    """ Calculates the index of the crossover frequency """
-    crossover_idx = np.argmax(fls >= crossover_freq)
-    return crossover_idx
+     Required parameters
+    :param fname:               Audio filename to be analysed, including full file path and extension.
 
+     Optional parameters
+    :param dev_output:          Bool, when False return the brightness, when True return all extracted features.
+    :param phase_correction:    Perform phase checking before summing to mono.
+    :param threshold:           Threshold below which to ignore the energy in a time window, default to 0.
+    :param ratio_crossover:     Crossover frequency for calculating the HF energy ratio, default to 2000 Hz.
+    :param centroid_crossover:  Highpass frequency for calculating the spectral centroid, default to 100 Hz.
+    :param stepSize:            Step size for calculating spectrogram, default to 1024.
+    :param blockSize:           Block size (fft length) for calculating spectrogram, default to 2048.
+    :param minFreq:             Frequency for high-pass filtering audio prior to all analysis, default to 20 Hz.
 
-def timbral_brightness(fname, threshold=0, crossover=3000, stepSize=1024, blockSize=2048, n_oct=2, minFreq=20):
-    """ The main process block where computations are completed with VAMP.
-     Data is accepted in the time domain, where a Hamming window is applied,
-     and the FFT of this data taken.  The magnitude spectrum is then smoothed
-     according to Noct (set to half-octave band smoothing by default),
-     before calculating the spectral centroid above the crossover frequency,
-     and the ratio of energy above the crossover frequency to all energy.
+    :return:                    Apparent brightness of audio file, float.
     """
     # use pysoundfile instead
     audio_samples, fs = sf.read(fname, always_2d=False)
 
-    num_channels = np.shape(audio_samples)
-    if len(num_channels) > 1:
-        # take just the left channel
-        audio_samples = audio_samples[:, 0]
+    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
 
-    # initialise default settings
-    centroid_list = []
-    crossover_idx = 0
-    mag_hi_list = []
-    mag_all_list = []
-    updated = False
-    window = np.hamming(blockSize)
+    '''
+      Filter audio
+    '''
+    # highpass audio at minimum frequency
+    audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=minFreq, fs=fs)
+    audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=minFreq, fs=fs)
+    audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=minFreq, fs=fs)
 
-    i = 0
-    # split the audio into blocks of audio (ignore last block like matlab
-    while (i + blockSize) < len(audio_samples):
-        eval_audio = audio_samples[i:i + blockSize]
-        complex_spectrum = np.fft.fft(eval_audio * window)
-        magnitude_spectrum = np.absolute(complex_spectrum[0:1 + int(len(complex_spectrum) / 2)])
+    # get highpass audio at ratio crossover
+    ratio_highpass_audio = timbral_util.filter_audio_highpass(audio_samples, ratio_crossover, fs)
+    ratio_highpass_audio = timbral_util.filter_audio_highpass(ratio_highpass_audio, ratio_crossover, fs)
+    ratio_highpass_audio = timbral_util.filter_audio_highpass(ratio_highpass_audio, ratio_crossover, fs)
 
-        if sum(magnitude_spectrum) > 0:
+    # get highpass audio at centroid crossover
+    centroid_highpass_audio = timbral_util.filter_audio_highpass(audio_samples, centroid_crossover, fs)
+    centroid_highpass_audio = timbral_util.filter_audio_highpass(centroid_highpass_audio, centroid_crossover, fs)
+    centroid_highpass_audio = timbral_util.filter_audio_highpass(centroid_highpass_audio, centroid_crossover, fs)
 
-            if not updated:
-                fls = calcFrequencyScale(len(magnitude_spectrum), fs, blockSize)
-                crossover_idx = calcCrossoverIDX(fls, crossover)
-                minIDX = calcMinIDX(fls, minFreq)
-                maxIDX = calcMaxIDX(fls, n_oct)
-                if n_oct > 0:
-                    f_upper = calcUpperFrequencyLimit(fls, n_oct, maxIDX)
-                    f_lower = calcLowFrequencyLimit(fls, n_oct, maxIDX)
+    # lowpass audio at ratio crossover
+    ratio_lowpass_audio = timbral_util.filter_audio_lowpass(audio_samples, ratio_crossover, fs)
+    ratio_lowpass_audio = timbral_util.filter_audio_lowpass(ratio_lowpass_audio, ratio_crossover, fs)
+    ratio_lowpass_audio = timbral_util.filter_audio_lowpass(ratio_lowpass_audio, ratio_crossover, fs)
 
-                updated = True
+    '''
+     Get spectrograms and normalise
+    '''
+    # normalise audio to the maximum value in the unfiltered audio
+    ratio_highpass_audio *= (1.0 / max(abs(audio_samples)))
+    centroid_highpass_audio *= (1.0 / max(abs(audio_samples)))
+    ratio_lowpass_audio *= (1.0 / max(abs(audio_samples)))
+    audio_samples *= (1.0 / max(abs(audio_samples)))
 
-            if n_oct > 0:
-                smoothed_spectrum = spectralSmoothing(magnitude_spectrum, f_upper, f_lower)
-            else:
-                smoothed_spectrum = magnitude_spectrum
+    # set FFT parameters
+    nfft = blockSize
+    hop_size = int(3 * nfft / 4)
+    # get spectrogram
+    # freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft, hop_size, nfft, 'constant', True, 'spectrum')
+    ratio_all_freq, ratio_all_time, ratio_all_spec = spectrogram(audio_samples, fs, 'hamming', nfft, hop_size, nfft,
+                                                              'constant', True, 'spectrum')
+    ratio_hp_freq, ratio_hp_time, ratio_hp_spec = spectrogram(ratio_highpass_audio, fs, 'hamming', nfft, hop_size, nfft,
+                                                              'constant', True, 'spectrum')
+    centroid_hp_freq, centroid_hp_time, centroid_hp_spec = spectrogram(centroid_highpass_audio, fs, 'hamming', nfft,
+                                                                       hop_size, nfft, 'constant', True, 'spectrum')
 
-            tpower = sum(smoothed_spectrum[minIDX:])
+    # initialise variables for storing data
+    all_ratio = []
+    all_hp_centroid = []
+    all_tpower = []
+    all_hp_centroid_tpower = []
 
-            # calculate the spectral centroid
-            if tpower > threshold:
-                upper_spectrum = smoothed_spectrum[crossover_idx:]
-                upper_fls = fls[crossover_idx:(crossover_idx + len(upper_spectrum))]
-                upper_power = sum(upper_spectrum)
-                centroid = sum(upper_spectrum * upper_fls) / upper_power
+    threshold = 0.0
+    for idx in range(len(ratio_hp_time)):  # just step through each time window
 
-                centroid_list.append(centroid)
-                mag_all_list.append(tpower)
-                mag_hi_list.append(upper_power)
+        # get the current spectrum for this time window
+        current_ratio_hp_spec = ratio_hp_spec[:, idx]
+        current_ratio_all_spec = ratio_all_spec[:, idx]
+        current_centroid_hp_spec = centroid_hp_spec[:, idx]
 
-        else:
-            centroid_list.append(0)
-            mag_all_list.append(0)
-            mag_hi_list.append(0)
+        # get the tpower
+        tpower = np.sum(current_ratio_all_spec)
+        hp_tpower = np.sum(current_ratio_hp_spec)
+        # check there is energy in the time window before calculating the ratio
+        if tpower > threshold:
+            # get the ratio
+            all_ratio.append(hp_tpower / tpower)
+            # store the powef for weighting
+            all_tpower.append(tpower)
 
-        i += stepSize
 
-    if sum(mag_all_list) == 0:
-        return 0
+        # get the t power to assure greater than zero
+        hp_centroid_tpower = np.sum(current_centroid_hp_spec)
+        if hp_centroid_tpower > threshold:
+            # get the centroid
+            all_hp_centroid.append(np.sum(current_centroid_hp_spec * centroid_hp_freq[:len(current_centroid_hp_spec)]) /
+                                   np.sum(current_centroid_hp_spec))
+            # store the tpower for weighting
+            all_hp_centroid.append(hp_centroid_tpower)
 
-    mean_centroid = np.mean(np.array(centroid_list))
-    mean_mag_hi = np.mean(np.array(mag_hi_list))
-    mean_mag_all = np.mean(np.array(mag_all_list))
+    # get the mean values
+    mean_ratio = np.mean(all_ratio)
+    mean_hp_centroid = np.mean(all_hp_centroid)
 
-    # float required for float division in Python 2.7
-    ratio = mean_mag_hi / float(mean_mag_all)
+    weighted_mean_ratio = np.average(all_ratio, weights=all_tpower)
+    weighted_mean_hp_centroid = np.average(all_hp_centroid, weights=all_hp_centroid)
 
-    # equation taken directly from Pearce [2016]
-    bright = -25.8699 + (64.0127 * (np.log10(ratio) + (0.44 * np.log10(mean_centroid))))
+    if dev_output:
+        # return the ratio and centroid
+        return np.log10(weighted_mean_ratio), np.log10(weighted_mean_hp_centroid)
+    else:
+        # perform thye linear regression
+        all_metrics = np.ones(4)
+        all_metrics[0] = np.log10(weighted_mean_ratio)
+        all_metrics[1] = np.log10(weighted_mean_hp_centroid)
+        all_metrics[2] = np.log10(weighted_mean_ratio) * np.log10(weighted_mean_hp_centroid)
 
-    return bright
+        coefficients = np.array([-2.9197705625030235, 9.048261758526614, 3.940747859061009, 47.989783427908705])
+        bright = np.sum(all_metrics * coefficients)
+        return bright

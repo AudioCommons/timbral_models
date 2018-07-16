@@ -1,0 +1,94 @@
+from __future__ import division
+import numpy as np
+import soundfile as sf
+import timbral_util
+
+
+def boominess_calculate(loudspec):
+    """
+      Calculates the Booming Index as described by Hatano, S., and Hashimoto, T. "Booming index as a measure for
+      evaluating booming sensation", The 29th International congress and Exhibition on Noise Control Engineering, 2000.
+    """
+
+    # loudspec from the loudness_1991 code results in values from 0.1 to 24 Bark in 0.1 steps
+    # I need to calculate a new weighting function for this
+    z = np.arange(0.1, 24.05, 0.1)
+    f = 600 * np.sinh(z / 6.0)  # convert these bark values to frequency
+    FR = [25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500,
+          3150, 4000, 5000, 6300, 8000, 10000, 12500] # get the centre frequencies of 3rd octave bands
+
+    # now I need to convert f onto the FR scale
+    logFR = np.log10(FR)
+    FR_step = logFR[1] - logFR[0]  # get the step size on the log scale
+    FR_min = logFR[0]  # get the minimum value of the logFR
+
+    logf = np.log10(f)  # get the log version of estimated frequencies
+    # estimate the indexes of the bark scale on the 3rd octave scale
+    estimated_index = ((logf - FR_min) / float(FR_step)) + 1
+
+    # weighting function based from the estimated indexes
+    Weighting_function = 2.13 * np.exp(-0.151 * estimated_index)
+
+    # change the LF indexes to roll off
+    Weighting_function[0] = 0.8  # this value is estimated
+    Weighting_function[1] = 1.05
+    Weighting_function[2] = 1.10
+    Weighting_function[3] = 1.18
+
+
+    # identify index where frequency is less than 280Hz
+    below_280_idx = np.where(f >= 280)[0][0]
+
+    I = loudspec * Weighting_function
+    loudness = np.sum(loudspec)
+    Ll = np.sum(loudspec[:below_280_idx])
+
+    Bandsum = timbral_util.log_sum(I)
+    BoomingIndex = Bandsum * (Ll / loudness)
+
+    return BoomingIndex
+
+
+def timbral_booming(fname, dev_output=False, phase_correction=False):
+    """
+     This is an implementation of the hasimoto booming index feature.
+     There are a few fudge factors with the code to convert between the internal representation of the sound using the
+     same loudness calculation as the sharpness code.  The equation for calculating the booming index is not
+     specifically quoted anywhere so I've done the best i can with the code that was presented.
+
+     Shin, SH, Ih, JG, Hashimoto, T., and Hatano, S.: "Sound quality evaluation of the booming sensation for passenger
+      cars", Applied Acoustics, Vol. 70, 2009.
+
+     Hatano, S., and Hashimoto, T. "Booming index as a measure for
+      evaluating booming sensation", The 29th International congress and Exhibition on Noise Control Engineering, 2000.
+
+     This function calculates the apparent Boominess of an audio file.
+
+     Version 0.2
+
+    Required parameter
+    :param fname:                   Audio filename to be analysed, including full file path and extension.
+
+    Optional parameters
+    :param dev_output:              Bool, when False return the warmth, when True return all extracted features (currently none)
+    :param phase_correction:        If the inter-channel phase should be estimated when performing a mono sum.
+                                    Defaults to False.
+
+    :return                         Apparent boominess of the audio file.
+
+    """
+
+    # use pysoundfile to read audio
+    audio_samples, fs = sf.read(fname, always_2d=False)
+    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
+
+    # normalise audio
+    audio_samples /= max(abs(audio_samples))
+
+    # calculate the specific loudness
+    N_entire, N_single = timbral_util.specific_loudness(audio_samples, Pref=100.0, fs=fs, Mod=0)
+
+    # calculate the booming index
+    boom = boominess_calculate(N_single)
+
+    return boom
