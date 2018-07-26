@@ -15,8 +15,9 @@ This is available: http://www.audiocommons.org/materials/
 
 Apr 27, 2017 - This committed version relates to the deliverable D5.2 First prototype of timbral characterisation tools for semantically annotating non-musical content.  
 
-This deliverable is available: http://www.audiocommons.org/materials/
+Jul 26, 2018 - This committed version relates to the deliverable D5.6 Second prototype of timbral characterisation tools for semantically annotating non-musical content.
 
-Direct link to this version of the repository: https://github.com/AudioCommons/timbral_models/tree/7eb3aefbc6d4d37e1b48d970a18cc397ed24ac30
+
+This deliverable is available: http://www.audiocommons.org/materials/
 
 
