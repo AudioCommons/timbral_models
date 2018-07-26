@@ -1,8 +1,13 @@
 from setuptools import setup
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 setup(name='timbral_models',
-      version='0.1',
+      version='0.2.2',
       description='Algorithms for predicting the timbral characteristics of audio files',
+      long_description=long_description,
+      long_description_content_type='text/markdown',
       url='https://github.com/AudioCommons/timbral_models',
       author='Andy Pearce',
       author_email='andy.pearce@surrey.ac.uk',
@@ -18,6 +23,7 @@ setup(name='timbral_models',
           'numpy',
           'soundfile',
           'scipy',
-          'librosa'
+          'librosa',
+          'sklearn'
       ],
       zip_safe=False)
