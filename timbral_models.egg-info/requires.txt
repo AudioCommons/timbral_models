@@ -2,3 +2,4 @@ numpy
 soundfile
 scipy
 librosa
+sklearn

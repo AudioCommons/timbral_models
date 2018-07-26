@@ -31,6 +31,20 @@ def timbral_depth(fname, dev_output=False, clip_output=False, threshold_db=-60, 
     :param db_decay_threshold:              Threshold, in dB, for estimating duration.
 
     :return:                                Aparent depth of audio file, float.
+
+    Copyright 2018 Andy Pearce
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
     """
     # use pysoundfile to read audio
     audio_samples, fs = sf.read(fname, always_2d=False)
