@@ -6,7 +6,7 @@ from scipy.signal import spectrogram
 import timbral_util
 
 
-def timbral_hardness(fname, dev_output=False, phase_correction=False, max_attack_time=0.1,
+def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_output=False, max_attack_time=0.1,
                      bandwidth_thresh_db=-50):
     """
      This function calculates the apparent hardness of an audio file.
@@ -190,4 +190,8 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, max_attack
                                  27.045935123823075])
 
         hardness = np.sum(all_metrics * coefficients)
+
+        if clip_output:
+            hardness = timbral_util.output_clip(hardness)
+
         return hardness

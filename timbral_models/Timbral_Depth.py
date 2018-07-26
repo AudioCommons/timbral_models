@@ -9,8 +9,9 @@ import timbral_util
 import scipy.stats
 
 
-def timbral_depth(fname, dev_output=False, threshold_db=-60, low_frequency_limit=20, centroid_crossover_frequency=2000,
-                  ratio_crossover_frequency=500, phase_correction=False, db_decay_threshold=-40):
+def timbral_depth(fname, dev_output=False, clip_output=False, threshold_db=-60, low_frequency_limit=20,
+                  centroid_crossover_frequency=2000, ratio_crossover_frequency=500, phase_correction=False,
+                  db_decay_threshold=-40):
     """
      This function calculates the apparent Depth of an audio file.
 
@@ -244,6 +245,9 @@ def timbral_depth(fname, dev_output=False, threshold_db=-60, low_frequency_limit
 
         # perform linear regression
         depth = np.sum(all_metrics * coefficients)
+
+        if clip_output:
+            depth = timbral_util.output_clip(depth)
 
         return depth
 

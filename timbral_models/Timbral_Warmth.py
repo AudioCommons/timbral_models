@@ -7,8 +7,8 @@ import scipy.stats
 from sklearn import linear_model
 
 
-def timbral_warmth(fname, dev_output=False, phase_correction=False, max_FFT_frame_size=8192, rolloff_ratio=0.85,
-                   max_WR = 12000):
+def timbral_warmth(fname, dev_output=False, phase_correction=False, clip_output=False, max_FFT_frame_size=8192,
+                   rolloff_ratio=0.85, max_WR = 12000):
     """
      This function estimates the perceptual Warmth of an audio file.
 
@@ -142,4 +142,8 @@ def timbral_warmth(fname, dev_output=False, phase_correction=False, max_FFT_fram
         metrics = np.array([metric1, metric2, metric3, metric4, metric5, metric6, metric_ones])
 
         warmth = np.sum(coefficients * metrics)
+
+        if clip_output:
+            warmth = timbral_util.output_clip(warmth)
+
         return warmth

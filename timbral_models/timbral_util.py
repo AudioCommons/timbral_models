@@ -1523,3 +1523,20 @@ def specific_loudness(x, Pref, fs, Mod):
 
     N_entire = N
     return N_entire, N_single
+
+
+def output_clip(score, min_score=0, max_score=100):
+    """
+      Limits the output of the score between min_score and max_score
+
+    :param score:
+    :param min_score:
+    :param max_score:
+    :return:
+    """
+    if score < min_score:
+        return 0.0
+    elif score > max_score:
+        return 100.0
+    else:
+        return score

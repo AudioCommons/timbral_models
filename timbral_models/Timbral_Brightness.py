@@ -5,8 +5,8 @@ import timbral_util
 from scipy.signal import spectrogram
 
 
-def timbral_brightness(fname, dev_output=False, phase_correction=False, threshold=0, ratio_crossover=2000,
-                       centroid_crossover=100, stepSize=1024, blockSize=2048, minFreq=20):
+def timbral_brightness(fname, dev_output=False, clip_output=False, phase_correction=False, threshold=0,
+                       ratio_crossover=2000, centroid_crossover=100, stepSize=1024, blockSize=2048, minFreq=20):
     """
       This function calculates the apparent Brightness of an audio file.
 
@@ -129,4 +129,8 @@ def timbral_brightness(fname, dev_output=False, phase_correction=False, threshol
 
         coefficients = np.array([-2.9197705625030235, 9.048261758526614, 3.940747859061009, 47.989783427908705])
         bright = np.sum(all_metrics * coefficients)
+
+        if clip_output:
+            bright = timbral_util.output_clip(bright)
+
         return bright
