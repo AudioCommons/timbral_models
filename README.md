@@ -1,8 +1,8 @@
 # AudioCommons Timbral Models
-This work is part of the [AudioCommons project] (https://www.audiocommons.org).
+This work is part of the [AudioCommons project](https://www.audiocommons.org).
 This distribution contains Python scripts developed for extracting timbral attributes of audio files.
 
-More detailed explanations of how the models function can be found in Deliverable D5.6: Second prototype of timbral characterisation tools for semantically annotating non-musical content, available: [http://www.audiocommons.org/materials/]
+More detailed explanations of how the models function can be found in Deliverable D5.6: Second prototype of timbral characterisation tools for semantically annotating non-musical content, available: http://www.audiocommons.org/materials/
 
 
 # Installing the package
@@ -18,7 +18,7 @@ pip install timbral_models
 
 
 # Dependencies
-The script can also be downloaded manually from the github repository ([https://github.com/AudioCommons/timbral_models]).  If doing this, dependencies will need to be manually installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, `sklearn`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
+The script can also be downloaded manually from the github repository (https://github.com/AudioCommons/timbral_models).  If doing this, dependencies will need to be manually installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, `sklearn`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
 ```
 $ pip install numpy
 $ pip install soundfile
