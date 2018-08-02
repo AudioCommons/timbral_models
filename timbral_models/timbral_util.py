@@ -5,7 +5,6 @@ import soundfile as sf
 from scipy.signal import butter, lfilter, spectrogram
 import matplotlib.pyplot as plt
 import essentia.standard as es
-import pyfilterbank
 from essentia import Pool, array
 import scipy.stats
 
