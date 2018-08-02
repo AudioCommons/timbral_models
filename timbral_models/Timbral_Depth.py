@@ -5,7 +5,7 @@ from scipy.signal import spectrogram
 import pyfilterbank
 import essentia
 import essentia.standard as es
-import timbral_util
+from . import timbral_util
 import scipy.stats
 
 

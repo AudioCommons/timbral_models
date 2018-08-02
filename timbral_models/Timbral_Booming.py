@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 import soundfile as sf
-import timbral_util
+from . import timbral_util
 
 
 def boominess_calculate(loudspec):

@@ -3,7 +3,7 @@ import numpy as np
 import librosa
 import soundfile as sf
 from scipy.signal import spectrogram
-import timbral_util
+from . import timbral_util
 
 
 def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_output=False, max_attack_time=0.1,
