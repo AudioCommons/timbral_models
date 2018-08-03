@@ -1,11 +1,9 @@
-from __future__ import division
+from __future__ import division, print_function
 import numpy as np
 import librosa
 import soundfile as sf
 from scipy.signal import butter, lfilter, spectrogram
-import matplotlib.pyplot as plt
 import essentia.standard as es
-import pyfilterbank
 from essentia import Pool, array
 import scipy.stats
 
@@ -500,7 +498,7 @@ def calculate_attack_time(envelope_samples, fs, calculate_attack_segment=True, t
             if (end_level - start_level) < 0.2 or (th_end_idx - th_start_idx) < 2:
                 # force calculation type to all
                 gradient_calulation_type = 'all'
-                print 'unable to calculate attack gradient with the \'mean\' method, reverting to \'all\' method.'
+                print('unable to calculate attack gradient with the \'mean\' method, reverting to \'all\' method.')
 
         if gradient_calulation_type == 'mean':
             # calculate the gradient based on the weighted mean of each attack
