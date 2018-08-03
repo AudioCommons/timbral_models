@@ -3,7 +3,6 @@ import numpy as np
 import librosa
 import soundfile as sf
 from scipy.signal import butter, lfilter, spectrogram
-import matplotlib.pyplot as plt
 import essentia.standard as es
 from essentia import Pool, array
 import scipy.stats
