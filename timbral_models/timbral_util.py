@@ -5,7 +5,6 @@ import soundfile as sf
 from scipy.signal import butter, lfilter, spectrogram
 import matplotlib.pyplot as plt
 import essentia.standard as es
-import pyfilterbank
 from essentia import Pool, array
 import scipy.stats
 
@@ -1554,3 +1553,144 @@ def output_clip(score, min_score=0, max_score=100):
         return 100.0
     else:
         return score
+
+
+def fast_hilbert(array):
+    """
+      Calculates the hilbert transform of the array by segmenting signal first to speed up calculation.
+    :param array:
+    :return:
+    """
+    step_size = 32768
+    overlap = 2
+    overlap_size = int(step_size/(2*overlap))
+    # how many steps, rounded to nearest int
+    # step_no = int((len(array) / (step_size - overlap)) + 0.5)
+    step_start = 0
+    hold_hilbert = np.array([])
+    while (step_start + step_size) < len(array):
+        hold_array = array[step_start:step_start+step_size]
+        this_hilbert = np.abs(scipy.signal.hilbert(hold_array))
+
+        if step_start == 0:
+            # try to concatonate the results
+            hold_hilbert = np.concatenate((hold_hilbert,this_hilbert[:3*overlap_size]))
+        else:
+            hold_hilbert = np.concatenate((hold_hilbert, this_hilbert[overlap_size:3*overlap_size]))
+
+        # increment the step
+        step_start += int(step_size/overlap)
+
+    # do the last step
+    hold_array = array[step_start:]
+    this_hilbert = np.abs(scipy.signal.hilbert(hold_array))
+
+    # try to concatonate the results
+    hold_hilbert = np.concatenate((hold_hilbert, this_hilbert[overlap_size:]))
+
+
+    return hold_hilbert
+
+
+def gammatonegram(audio_samples, fs, twin=0.025, thop=0.01, N=64, fmin=50, fmax=None, return_scale='Hz',
+                  return_step_size=False, return_db=True):
+    """
+      Returns a gammatone spectrogram based off the code from [1], using essentia implementation for gammatone filter
+      calculation.  Note that this approximates gammatone filters for computartional efficiency.
+
+      [1] http://www.ee.columbia.edu/~dpwe/resources/matlab/gammatonegram/
+
+    :param audio:
+    :param fs:
+    :param twin:
+    :param thop:
+    :param N:
+    :param fmin:
+    :param fmax:
+    :return:
+    """
+    from essentia.standard import ERBBands
+    from essentia import array as es_array
+
+    if fmax == None:
+        fmax = fs/2
+
+    twin_samples = fs * twin
+    thop_samples = fs * thop  # this may cause some issues with strange sample rates, haven't tested
+    nperseg = int(2 ** (np.ceil(np.log2(twin_samples))))  # calculate closest power of 2
+    noverlap = nperseg - thop_samples
+
+    # get spectrogram based on perameters defined
+    f, t, spec = spectrogram(audio_samples, fs, window='boxcar', nperseg=nperseg, noverlap=noverlap, scaling='density',
+                             mode='magnitude')
+    gammagram = np.zeros((N, len(t)))
+
+    # initialise the function
+    ToERBS = ERBBands(highFrequencyBound=fmax, inputSize=spec.shape[0], lowFrequencyBound=fmin, numberBands=N, sampleRate=fs,
+                      type='magnitude')
+
+    for time in range(len(t)):
+        this_spec = es_array(spec[:,time])
+        x = ToERBS(this_spec)
+        # if return_db:
+        #     if np.sum(x) > 0:  # only need to calculate if contains values greater than 0
+        #         for bin in range(len(x)):
+        #             if x[bin] > 0:
+        #                 x[bin] = 20*np.log10(x[bin])
+        gammagram[:,time] = np.array(x)
+
+    # calculate gammatone frequency scale
+    EarQ = 9.26449
+    minBW = 24.7
+    order = 1
+    nfilts = N
+    maxfreq = fmax
+    minfreq = fmin
+
+    fls = np.exp(np.arange(1, nfilts + 1) * (
+                (-1.0 * np.log(maxfreq + EarQ * minBW)) + np.log(minfreq + EarQ * minBW)) / nfilts) * (
+                    maxfreq + EarQ * minBW) - (EarQ * minBW)
+
+    if return_scale == 'kHz':
+        fls = fls / 1000.0  # convert to kHz
+    elif return_scale == 'Bark':
+        # fls = fls / 1000.0  # convert to kHz
+        fls = 13 * np.arctan(0.00076 * fls) + 3.5 * np.arctan((fls / 7500.0)**2.0)
+
+    elif return_scale == 'ERB':
+        fls = fls / 1000.0  # convert to kHz
+        fls = 24.7 * (4.37 * fls + 1)  # convert to ERB with equation from Moore and Glasberg [1983]
+
+    if return_step_size:
+        return fls, t, gammagram, noverlap
+    else:
+        return fls, t, gammagram
+
+
+
+
+
+
+    #
+    #
+    #
+    #
+    # # How long a window to use relative to the integration window requested
+    # winext = 1
+    # twinmod = winext * twin
+    # # first spectrogram
+    # nfft = 2.0 ** (np.ceil(np.log(2.0 * twinmod * fs) / np.log(2)))
+    # nhop = round(THOP * SR)
+    # nwin = round(twinmod * SR)
+    # [gtm, F] = fft2gammatonemx(nfft, SR, N, WIDTH, FMIN, FMAX, nfft / 2 + 1)
+    # # perform FFT and weighting in amplitude domain
+    # Y = 1 / nfft * gtm * abs(specgram(X, nfft, SR, nwin, nwin - nhop))
+    # # or the power domain?  doesn't match nearly as well
+    # # Y = 1 / nfft * sqrt(gtm * abs(specgram(X, nfft, SR, nwin, nwin - nhop). ^ 2));
+
+
+
+
+
+
+
