@@ -122,14 +122,14 @@ def timbral_brightness(fname, dev_output=False, clip_output=False, phase_correct
             all_hp_centroid.append(np.sum(current_centroid_hp_spec * centroid_hp_freq[:len(current_centroid_hp_spec)]) /
                                    np.sum(current_centroid_hp_spec))
             # store the tpower for weighting
-            all_hp_centroid.append(hp_centroid_tpower)
+            all_hp_centroid_tpower.append(hp_centroid_tpower)
 
     # get the mean values
     mean_ratio = np.mean(all_ratio)
     mean_hp_centroid = np.mean(all_hp_centroid)
 
     weighted_mean_ratio = np.average(all_ratio, weights=all_tpower)
-    weighted_mean_hp_centroid = np.average(all_hp_centroid, weights=all_hp_centroid)
+    weighted_mean_hp_centroid = np.average(all_hp_centroid, weights=all_hp_centroid_tpower)
 
     if dev_output:
         # return the ratio and centroid
