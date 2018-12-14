@@ -2,48 +2,53 @@ from __future__ import division
 import numpy as np
 import soundfile as sf
 from scipy.signal import spectrogram
-import essentia
-import essentia.standard as es
-from . import timbral_util
 import scipy.stats
+from . import timbral_util
 
 
-def timbral_depth(fname, dev_output=False, clip_output=False, threshold_db=-60, low_frequency_limit=20,
-                  centroid_crossover_frequency=2000, ratio_crossover_frequency=500, phase_correction=False,
+def timbral_depth(fname, dev_output=False, phase_correction=False, clip_output=False, threshold_db=-60,
+                  low_frequency_limit=20, centroid_crossover_frequency=2000, ratio_crossover_frequency=500,
                   db_decay_threshold=-40):
     """
      This function calculates the apparent Depth of an audio file.
+     This version of timbral_brightness relates to D5.7.
 
-     Version 0.2
+     Version 0.3
 
      Required parameters
-    :param fname:                           Audio filename to be analysed, including full file path and extension.
+      :param fname:                        string, Audio filename to be analysed, including full file path and extension.
 
-    Optional parameters
-    :param dev_output:                      Bool, when False return the depth, when True return all extracted
-                                            features.
-    :param threshold_db:                    Threshold, in dB, for calculating centroids.
-    :param low_frequency_limit:             Low frequency limit at which to highpass filter the audio.
-    :param centroid_crossover_frequency:    Crossover frequency for calculating the spectral centroid.
-    :param ratio_crossover_frequency:       Crossover frequency for calculating the ratio.
-    :param phase_correction:                Perform phase checking before summing to mono.
-    :param db_decay_threshold:              Threshold, in dB, for estimating duration.
+     Optional parameters
+      :param phase_correction:             bool, perform phase checking before summing to mono.  Defaults to False.
+      :param dev_output:                   bool, when False return the depth, when True return all extracted
+                                           features.  Default to False.
+      :param threshold_db:                 float/int (negative), threshold, in dB, for calculating centroids.
+                                           Should be negative.  Defaults to -60.
+      :param low_frequency_limit:          float/int, low frequency limit at which to highpass filter the audio, in Hz.
+                                           Defaults to 20.
+      :param centroid_crossover_frequency: float/int, crossover frequency for calculating the spectral centroid, in Hz.
+                                           Defaults to 2000
+      :param ratio_crossover_frequency:    float/int, crossover frequency for calculating the ratio, in Hz.
+                                           Defaults to 500.
 
-    :return:                                Aparent depth of audio file, float.
+      :param db_decay_threshold:           float/int (negative), threshold, in dB, for estimating duration.  Should be
+                                           negative.  Defaults to -40.
 
-    Copyright 2018 Andy Pearce
+      :return:                             float, aparent depth of audio file, float.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+     Copyright 2018 Andy Pearce
+
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
 
        http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
     """
     # use pysoundfile to read audio
     audio_samples, fs = sf.read(fname, always_2d=False)
@@ -51,26 +56,19 @@ def timbral_depth(fname, dev_output=False, clip_output=False, threshold_db=-60, 
     # reduce to mono
     audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
 
-    # highpass audio - running 3 times for -18dB per octave
+    # highpass audio - run 3 times to get -18dB per octave - unstable filters produced when using a 6th order
     audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
     audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
     audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
 
     # running 3 times to get -18dB per octave rolloff, greater than second order filters are unstable in python
-    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(audio_samples,
-                                                                       crossover=centroid_crossover_frequency, fs=fs)
-    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(lowpass_centroid_audio_samples,
-                                                                       crossover=centroid_crossover_frequency, fs=fs)
-    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(lowpass_centroid_audio_samples,
-                                                                       crossover=centroid_crossover_frequency, fs=fs)
+    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(audio_samples,crossover=centroid_crossover_frequency,fs=fs)
+    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(lowpass_centroid_audio_samples,crossover=centroid_crossover_frequency,fs=fs)
+    lowpass_centroid_audio_samples = timbral_util.filter_audio_lowpass(lowpass_centroid_audio_samples,crossover=centroid_crossover_frequency,fs=fs)
 
-    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(audio_samples,
-                                                                    crossover=ratio_crossover_frequency, fs=fs)
-    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(lowpass_ratio_audio_samples,
-                                                                    crossover=ratio_crossover_frequency, fs=fs)
-    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(lowpass_ratio_audio_samples,
-                                                                    crossover=ratio_crossover_frequency, fs=fs)
-
+    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(audio_samples,crossover=ratio_crossover_frequency,fs=fs)
+    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(lowpass_ratio_audio_samples,crossover=ratio_crossover_frequency,fs=fs)
+    lowpass_ratio_audio_samples = timbral_util.filter_audio_lowpass(lowpass_ratio_audio_samples,crossover=ratio_crossover_frequency,fs=fs)
 
     '''
       Get spectrograms and normalise

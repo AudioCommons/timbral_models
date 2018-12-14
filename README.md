@@ -6,18 +6,15 @@ More detailed explanations of how the models function can be found in Deliverabl
 
 
 ## Installing the package
-The timbral_models package can be installed using the pip command.  This will handle most dependencies.
+The timbral_models package can be installed using the pip command.  This will handle installation of all dependencies.  In the update to version 3.0, the dependency to essentia was removed and only pip installable packages are required.
 ```
 pip install timbral_models
 ```
-Note that during test installing the package with only basic python installed, an error occurred when installing dependencies.  This can be overcome by first installing numpy, followed by timbral_models.
-```
-pip install numpy
-pip install timbral_models
-```
 
-Additionally, the code requires the use of the Essentia library.  Documentation for the installation of Essentia can be found at (http://essentia.upf.edu/documentation/installing.html).  
+Please note that during testing, pip was unable to install some of the dependencies and produced an error.  In these cases, either rerun the `pip install timbral_models` command or install the offending dependency directly, e.g. `pip install numpy`. 
 
+The package can also be installed locally and be made editable.  To do this, clone the repository, navigate to the folder, and run the pip command `pip install -e .`.
+  
 
 ## Dependencies
 The script can also be downloaded manually from the github repository (https://github.com/AudioCommons/timbral_models).  If doing this, dependencies will need to be manually installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, `sklearn`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
@@ -28,8 +25,6 @@ $ pip install librosa
 $ pip install scipy
 $ pip install sklearn
 ```
-
-The Essentia library will also need to be installed using this manual installation.  Documentation for the installation of Essentia can be found at (http://essentia.upf.edu/documentation/installing.html).
 
 
 ## Using the models
@@ -59,6 +54,8 @@ brightness = timbral_brightness(fname)
 
 ## Version History
 This section documents the version history of the timbral models.  To download a specific version of the model that relate to a specific deliverable, please check this section and download the most recent version from that date.
+
+2018/12/14 - Version 0.3 of timbral models, relates to Audio Commons Deliverable D5.7. This version of the repository relates to the software version 0.3 on PyPI.
 
 2018/07/26 - Version 0.2 of timbral models, relates to Audio Commons Deliverable D5.6.  This version of the repository relates to the software version 0.2 on PyPI. 
 

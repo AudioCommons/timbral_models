@@ -3,15 +3,14 @@ import numpy as np
 import librosa
 import soundfile as sf
 from scipy.signal import butter, lfilter, spectrogram
-import essentia.standard as es
-from essentia import Pool, array
 import scipy.stats
+# import pyloudnorm as pyln
 
 """
   The timbral util is a collection of functions that can be accessed by the individual timbral models.  These can be 
   used for extracting features or manipulating the audio that are useful to multiple attributes.
   
-  Version 0.2 
+  Version 0.3 
   
   Copyright 2018 Andy Pearce
 
@@ -52,10 +51,9 @@ def get_percussive_audio(audio_samples, return_ratio=True):
     :return:                If return_ratio is True (default), the ratio of percussive energy is returned.
                             If False, the function returns the percussive audio as a time domain array.
     """
+    # use librosa decomposition
     D = librosa.core.stft(audio_samples)
     H, P = librosa.decompose.hpss(D)
-    # example code for how the margin can be changed to improve separation
-    # H, P = librosa.decompose.hpss(D, margin=(1.0, 5.0))
 
     # inverse transform to get time domain arrays
     percussive_audio = librosa.core.istft(P)
@@ -63,14 +61,8 @@ def get_percussive_audio(audio_samples, return_ratio=True):
 
     if return_ratio:
         # frame by frame RMS energy
-        percussive_energy = []
-        harmoinic_energy = []
-
-        # use essentia to calculate the RMS across time
-        for frame in es.FrameGenerator(percussive_audio, frameSize=1024, hopSize=512):
-            percussive_energy.append(es.RMS()(frame))
-        for frame in es.FrameGenerator(harmonic_audio, frameSize=1024, hopSize=512):
-            harmoinic_energy.append(es.RMS()(frame))
+        percussive_energy = calculate_rms_enveope(percussive_audio, step_size=1024, overlap_step=512, normalise=False)
+        harmonic_energy = calculate_rms_enveope(harmonic_audio, step_size=1024, overlap_step=512, normalise=False)
 
         # set defaults for storing the data
         ratio = []
@@ -78,9 +70,9 @@ def get_percussive_audio(audio_samples, return_ratio=True):
 
         #get the ratio for each RMS time frame
         for i in range(len(percussive_energy)):
-            if percussive_energy[i] != 0 and harmoinic_energy != 0:
-                ratio.append(percussive_energy[i] / (percussive_energy[i] + harmoinic_energy[i]))
-                t_power.append((percussive_energy[i] + harmoinic_energy[i]))
+            if percussive_energy[i] != 0 and harmonic_energy[i] != 0:
+                ratio.append(percussive_energy[i] / (percussive_energy[i] + harmonic_energy[i]))
+                t_power.append((percussive_energy[i] + harmonic_energy[i]))
 
         # take a weighted average of the ratio
         ratio = np.average(ratio, weights=t_power)
@@ -141,8 +133,8 @@ def filter_audio_bandpass(audio_samples, f0, noct, fs, order=2):
     :param f0: the centre frequency of the bandpass filter
     :param bandwidth: the bandwidth of the filter
     :param order: order of the filter, defaults to 2
-    :return: audio file filtered
 
+    :return: audio file filtered
     """
     fd = 2 ** (1.0 / (noct * 2))
     lowcut = f0 / fd
@@ -614,7 +606,7 @@ def calculate_attack_time(envelope_samples, fs, calculate_attack_segment=True, t
 
 
 def calculate_onsets(audio_samples, envelope_samples, fs, look_back_time=20, hysteresis_time=300, hysteresis_percent=10,
-                     onset_in_noise_threshold=10, minimum_onset_time_separation=100, method='librosa', nperseg=512):
+                     onset_in_noise_threshold=10, minimum_onset_time_separation=100, nperseg=512):
     """
       Calculates the onset times using a look backwards recursive function to identify actual note onsets, and weights
        the outputs based on the onset strength to avoid misidentifying onsets.
@@ -643,45 +635,8 @@ def calculate_onsets(audio_samples, envelope_samples, fs, look_back_time=20, hys
     :return:                                thresholded onsets, returns [0] if no onsets are identified.  Note that a
                                             value of [0] is also possible during normal opperation.
     """
-    # set method for caluclating onsets and estimate the onsets
-    if method == 'librosa':
-        onsets = librosa.onset.onset_detect(audio_samples, fs, backtrack=True, units='samples')
-    elif method == 'essentia_hfc':
-        od1 = es.OnsetDetection(method='hfc')
-        w = es.Windowing(type='hann')
-        fft = es.FFT()  # this gives us a complex FFT
-        c2p = es.CartesianToPolar()  # and this turns it into a pair (magnitude, phase)
-        pool = Pool()
-        spectrum = es.Spectrum()
-        # let's get down to business
-        for frame in es.FrameGenerator(audio_samples, frameSize=1024, hopSize=512):
-            mag, phase, = c2p(fft(w(frame)))
-            pool.add('features.hfc', od1(mag, phase))
-
-        # Phase 2: compute the actual onsets locations
-        hold_onsets = es.Onsets()
-        onsets = hold_onsets(array([pool['features.hfc']]), [1])
-        onsets *= fs
-
-    elif method == 'essentia_complex':
-        od2 = es.OnsetDetection(method='complex')
-        # let's also get the other algorithms we will need, and a pool to store the results
-        w = es.Windowing(type='hann')
-        fft = es.FFT()  # this gives us a complex FFT
-        c2p = es.CartesianToPolar()  # and this turns it into a pair (magnitude, phase)
-        pool = Pool()
-        spectrum = es.Spectrum()
-        # let's get down to business
-        for frame in es.FrameGenerator(audio_samples, frameSize=1024, hopSize=512):
-            mag, phase, = c2p(fft(w(frame)))
-            pool.add('features.complex', od2(mag, phase))
-
-        # Phase 2: compute the actual onsets locations
-        hold_onsets = es.Onsets()
-        onsets = hold_onsets(array([pool['features.complex']]), [1])
-        onsets *= fs
-    else:
-        raise ValueError('method for calculating onsets musy be \'librosa\', \'essentia_hfc\', or \'essentia_complex\'')
+    # get onsets with librosa estimation
+    onsets = librosa.onset.onset_detect(audio_samples, fs, backtrack=True, units='samples')
 
     # set values for return_loop method
     time_thresh = int(look_back_time * 0.001 * fs)  # 10 ms default look-back time, in samples
@@ -852,8 +807,17 @@ def get_bandwidth_array(audio_samples, fs, nperseg=512, overlap_step=32, rolloff
         spec /= np.max(spec)
     elif normalisation_method == 'RMS_Time_Window':
         spec /= np.max(np.sqrt(np.sum(spec * spec, axis=0)))
+    elif normalisation_method == "none":
+        pass
     else:
         raise ValueError('Bandwidth normalisation method must be \'Single_TF_Bin\' or \'RMS_Time_Window\'')
+
+    # get values for thresholding
+    level_with_time = np.sum(spec, axis=0)
+    max_l = np.max(level_with_time)
+    min_l = np.min(level_with_time)
+    min_tpower = (0.1 * (max_l - min_l)) + min_l
+
 
     # initialise lists for storage
     rollon = []
@@ -866,7 +830,7 @@ def get_bandwidth_array(audio_samples, fs, nperseg=512, overlap_step=32, rolloff
     for time_count in range(len(t)):
         seg = spec[:, time_count]
         tpower = np.sum(seg)
-        if tpower > 0.0:
+        if tpower > min_tpower:
             if low_bandwidth_method == 'Percentile':
                 # get the spectral rollon
                 rollon_counter = 1
@@ -896,12 +860,13 @@ def get_bandwidth_array(audio_samples, fs, nperseg=512, overlap_step=32, rolloff
                     bandwidth.append(f[rolloff_idx] - f[rollon_counter - 1])
             else:
                 bandwidth.append(0)
+
+            # get centroid values
+            centroid.append(np.sum(seg * f) / np.sum(seg))
+            centroid_power.append(tpower)
         else:
             bandwidth.append(0)
 
-        if tpower > 0.05:
-            centroid.append(np.sum(seg * f) / np.sum(seg))
-            centroid_power.append(tpower)
     if return_centroid:
         return bandwidth, t, f, np.average(centroid, weights=centroid_power)
     else:
@@ -933,12 +898,13 @@ def calculate_bandwidth_gradient(bandwidth_segment, t):
     return bandwidth_gradient
 
 
-def calculate_rms_enveope(audio_samples, step_size=256, normalise=True):
+def calculate_rms_enveope(audio_samples, step_size=256, overlap_step=256, normalise=True):
     """
       Calculate the RMS envelope of the audio signal.
 
-    :param audio_samples:   the audio samples.
-    :param step_size:       number of samples to get the RMS from.
+    :param audio_samples:   numpy array, the audio samples.
+    :param step_size:       int, number of samples to get the RMS from.
+    :param overlap_step:    int, number of samples to overlap.
 
     :return:                RMS array
     """
@@ -949,7 +915,7 @@ def calculate_rms_enveope(audio_samples, step_size=256, normalise=True):
     # step through the signal
     while i < len(audio_samples) - step_size:
         rms_envelope.append(np.sqrt(np.mean(audio_samples[i:i + step_size] * audio_samples[i:i + step_size])))
-        i += step_size
+        i += overlap_step
 
     # use the remainder of the array for a final sample
     t_hold.append(i)
@@ -1153,8 +1119,6 @@ def spectral_flux(spectrogram, method='sum'):
         return sum_flux
 
     elif method == 'multiply':
-
-
         # multiplication between adjacent frames
         diff_spec = spectrogram[:,:-1] * spectrogram[:,1:]
         sum_diff_spec = (np.sum(diff_spec ** 2.0, axis=0))  # variation acorss time
@@ -1554,7 +1518,7 @@ def output_clip(score, min_score=0, max_score=100):
         return score
 
 
-def fast_hilbert(array):
+def fast_hilbert(array, use_matlab_hilbert=False):
     """
       Calculates the hilbert transform of the array by segmenting signal first to speed up calculation.
     :param array:
@@ -1569,7 +1533,10 @@ def fast_hilbert(array):
     hold_hilbert = np.array([])
     while (step_start + step_size) < len(array):
         hold_array = array[step_start:step_start+step_size]
-        this_hilbert = np.abs(scipy.signal.hilbert(hold_array))
+        if use_matlab_hilbert:
+            this_hilbert = np.abs(matlab_hilbert(hold_array))
+        else:
+            this_hilbert = np.abs(scipy.signal.hilbert(hold_array))
 
         if step_start == 0:
             # try to concatonate the results
@@ -1586,108 +1553,232 @@ def fast_hilbert(array):
 
     # try to concatonate the results
     hold_hilbert = np.concatenate((hold_hilbert, this_hilbert[overlap_size:]))
-
-
     return hold_hilbert
 
 
-def gammatonegram(audio_samples, fs, twin=0.025, thop=0.01, N=64, fmin=50, fmax=None, return_scale='Hz',
-                  return_step_size=False, return_db=True):
+def fast_hilbert_spectrum(array, use_matlab_hilbert=False):
     """
-      Returns a gammatone spectrogram based off the code from [1], using essentia implementation for gammatone filter
-      calculation.  Note that this approximates gammatone filters for computartional efficiency.
-
-      [1] http://www.ee.columbia.edu/~dpwe/resources/matlab/gammatonegram/
-
-    :param audio:
-    :param fs:
-    :param twin:
-    :param thop:
-    :param N:
-    :param fmin:
-    :param fmax:
+      Calculates the hilbert transform of the array by segmenting signal first to speed up calculation.
+    :param array:
     :return:
     """
-    from essentia.standard import ERBBands
-    from essentia import array as es_array
+    step_size = 32768
+    overlap = 2
+    overlap_size = int(step_size/(2*overlap))
+    step_start = 0
+    hold_HILBERT = []
+    if (step_start + step_size) < len(array):
+        while (step_start + step_size) < len(array):
+            hold_array = array[step_start:step_start+step_size]
+            if use_matlab_hilbert:
+                this_hilbert = np.abs(matlab_hilbert(hold_array))
+            else:
+                this_hilbert = np.abs(scipy.signal.hilbert(hold_array))
 
-    if fmax == None:
-        fmax = fs/2
+            HILBERT = np.abs(np.fft.fft(np.abs(this_hilbert)))
+            HILBERT = HILBERT[0:int(len(HILBERT) / 2.0)]  # take the real part
+            hold_HILBERT.append(HILBERT)
 
-    twin_samples = fs * twin
-    thop_samples = fs * thop  # this may cause some issues with strange sample rates, haven't tested
-    nperseg = int(2 ** (np.ceil(np.log2(twin_samples))))  # calculate closest power of 2
-    noverlap = nperseg - thop_samples
+            step_start += int(step_size/overlap)
 
-    # get spectrogram based on perameters defined
-    f, t, spec = spectrogram(audio_samples, fs, window='boxcar', nperseg=nperseg, noverlap=noverlap, scaling='density',
-                             mode='magnitude')
-    gammagram = np.zeros((N, len(t)))
+        # hilbert_spectrum = np.sum(hold_HILBERT, axis=0)
+        hilbert_spectrum = np.mean(hold_HILBERT, axis=0)
 
-    # initialise the function
-    ToERBS = ERBBands(highFrequencyBound=fmax, inputSize=spec.shape[0], lowFrequencyBound=fmin, numberBands=N, sampleRate=fs,
-                      type='magnitude')
-
-    for time in range(len(t)):
-        this_spec = es_array(spec[:,time])
-        x = ToERBS(this_spec)
-        # if return_db:
-        #     if np.sum(x) > 0:  # only need to calculate if contains values greater than 0
-        #         for bin in range(len(x)):
-        #             if x[bin] > 0:
-        #                 x[bin] = 20*np.log10(x[bin])
-        gammagram[:,time] = np.array(x)
-
-    # calculate gammatone frequency scale
-    EarQ = 9.26449
-    minBW = 24.7
-    order = 1
-    nfilts = N
-    maxfreq = fmax
-    minfreq = fmin
-
-    fls = np.exp(np.arange(1, nfilts + 1) * (
-                (-1.0 * np.log(maxfreq + EarQ * minBW)) + np.log(minfreq + EarQ * minBW)) / nfilts) * (
-                    maxfreq + EarQ * minBW) - (EarQ * minBW)
-
-    if return_scale == 'kHz':
-        fls = fls / 1000.0  # convert to kHz
-    elif return_scale == 'Bark':
-        # fls = fls / 1000.0  # convert to kHz
-        fls = 13 * np.arctan(0.00076 * fls) + 3.5 * np.arctan((fls / 7500.0)**2.0)
-
-    elif return_scale == 'ERB':
-        fls = fls / 1000.0  # convert to kHz
-        fls = 24.7 * (4.37 * fls + 1)  # convert to ERB with equation from Moore and Glasberg [1983]
-
-    if return_step_size:
-        return fls, t, gammagram, noverlap
     else:
-        return fls, t, gammagram
+        # how much to pad by
+        array = np.pad(array, (0, step_size - len(array)), 'constant', constant_values=0.0)
+
+        if use_matlab_hilbert:
+            this_hilbert = np.abs(matlab_hilbert(array))
+        else:
+            this_hilbert = np.abs(scipy.signal.hilbert(array))
+
+        HILBERT = np.abs(np.fft.fft(np.abs(this_hilbert)))
+        HILBERT = HILBERT[0:int(len(HILBERT) / 2.0)]  # take the real part
+
+        hilbert_spectrum = HILBERT
+
+    return hilbert_spectrum
+
+
+def matlab_hilbert(signal):
+    '''
+      Define a method for calculating the hilbert transform of a 1D array using the method from Matlab
+
+    :param signal:
+    :return:
+    '''
+    # get the fft
+    n = len(signal)
+    x = np.fft.fft(signal)
+    h = np.zeros(n)
+
+    if (n>0) and (~isodd(n)):
+        # even and nonempty
+        h[0] = 1
+        h[int(n/2)] = 1
+        h[1:int(n/2)] = 2
+    elif n>0:
+        # odd and nonempty
+        h[0] = 1
+        h[1:int((n+1)/2.0)] = 2
+
+    # this is the hilbert bit
+    x = np.fft.ifft(x * h)
+
+    return x
 
 
 
+def isodd(num):
+    return num & 0x1
+
+
+'''
+  This function removed because it utilises essentia
+'''
+# def gammatonegram(audio_samples, fs, twin=0.025, thop=0.01, N=64, fmin=50, fmax=None, return_scale='Hz',
+#                   return_step_size=False, return_db=True):
+#     """
+#       Returns a gammatone spectrogram based off the code from [1], using essentia implementation for gammatone filter
+#       calculation.  Note that this approximates gammatone filters for computartional efficiency.
+#
+#       [1] http://www.ee.columbia.edu/~dpwe/resources/matlab/gammatonegram/
+#
+#     :param audio:
+#     :param fs:
+#     :param twin:
+#     :param thop:
+#     :param N:
+#     :param fmin:
+#     :param fmax:
+#     :return:
+#     """
+#     from essentia.standard import ERBBands
+#     from essentia import array as es_array
+#
+#     if fmax == None:
+#         fmax = fs/2
+#
+#     twin_samples = fs * twin
+#     thop_samples = fs * thop  # this may cause some issues with strange sample rates, haven't tested
+#     nperseg = int(2 ** (np.ceil(np.log2(twin_samples))))  # calculate closest power of 2
+#     noverlap = nperseg - thop_samples
+#
+#     # get spectrogram based on perameters defined
+#     f, t, spec = spectrogram(audio_samples, fs, window='boxcar', nperseg=nperseg, noverlap=noverlap, scaling='density',
+#                              mode='magnitude')
+#     gammagram = np.zeros((N, len(t)))
+#
+#     # initialise the function
+#     ToERBS = ERBBands(highFrequencyBound=fmax, inputSize=spec.shape[0], lowFrequencyBound=fmin, numberBands=N, sampleRate=fs,
+#                       type='magnitude')
+#
+#     for time in range(len(t)):
+#         this_spec = es_array(spec[:,time])
+#         x = ToERBS(this_spec)
+#         gammagram[:,time] = np.array(x)
+#
+#     # calculate gammatone frequency scale
+#     EarQ = 9.26449
+#     minBW = 24.7
+#     order = 1
+#     nfilts = N
+#     maxfreq = fmax
+#     minfreq = fmin
+#
+#     fls = np.exp(np.arange(1, nfilts + 1) * (
+#                 (-1.0 * np.log(maxfreq + EarQ * minBW)) + np.log(minfreq + EarQ * minBW)) / nfilts) * (
+#                     maxfreq + EarQ * minBW) - (EarQ * minBW)
+#
+#     if return_scale == 'kHz':
+#         fls = fls / 1000.0  # convert to kHz
+#     elif return_scale == 'Bark':
+#         # fls = fls / 1000.0  # convert to kHz
+#         fls = 13 * np.arctan(0.00076 * fls) + 3.5 * np.arctan((fls / 7500.0)**2.0)
+#
+#     elif return_scale == 'ERB':
+#         fls = fls / 1000.0  # convert to kHz
+#         fls = 24.7 * (4.37 * fls + 1)  # convert to ERB with equation from Moore and Glasberg [1983]
+#
+#     if return_step_size:
+#         return fls, t, gammagram, noverlap
+#     else:
+#         return fls, t, gammagram
 
 
 
-    #
-    #
-    #
-    #
-    # # How long a window to use relative to the integration window requested
-    # winext = 1
-    # twinmod = winext * twin
-    # # first spectrogram
-    # nfft = 2.0 ** (np.ceil(np.log(2.0 * twinmod * fs) / np.log(2)))
-    # nhop = round(THOP * SR)
-    # nwin = round(twinmod * SR)
-    # [gtm, F] = fft2gammatonemx(nfft, SR, N, WIDTH, FMIN, FMAX, nfft / 2 + 1)
-    # # perform FFT and weighting in amplitude domain
-    # Y = 1 / nfft * gtm * abs(specgram(X, nfft, SR, nwin, nwin - nhop))
-    # # or the power domain?  doesn't match nearly as well
-    # # Y = 1 / nfft * sqrt(gtm * abs(specgram(X, nfft, SR, nwin, nwin - nhop). ^ 2));
+def window_audio(audio_samples, window_length=4096):
+    """
+      Segment the audio samples into a numpy array the correct size and shape, so that each row is a new window of audio
+    :param audio_samples:
+    :param window_length:
+    :param overlap:
+    :return:
+    """
+    remainder = np.mod(len(audio_samples), window_length)  # how many samples are left after division
+
+    #zero pad audio samples
+    audio_samples = np.pad(audio_samples, (0, int(window_length-remainder)), 'constant', constant_values=0.0)
+    windowed_samples = np.reshape(audio_samples, (int(len(audio_samples) / window_length), int(window_length)))
+
+    return windowed_samples
 
 
+def normal_dist(array, theta=1.0, mean=0.0):
+    y = (1.0 / (theta * np.sqrt(2.0 * np.pi))) * np.exp((-1.0 * ((array - mean)**2.0)) / 2.0 * (theta ** 2.0))
+    return y
+
+
+def weighted_bark_level(audio_samples, fs, low_bark_band=0, upper_bark_band=240):
+    #window the audio
+    windowed_samples = window_audio(audio_samples)
+
+    # need to define a function for the roughness stimuli, emphasising the 20 - 40 region (of the bark scale)
+    mean_bark_band = (low_bark_band + upper_bark_band) / 2.0
+    array = np.arange(low_bark_band, upper_bark_band)
+    x = normal_dist(array, theta=0.01, mean=mean_bark_band)
+    x -= np.min(x)
+    x /= np.max(x)
+
+    weight_array = np.zeros(240)
+    weight_array[low_bark_band:upper_bark_band] = x
+
+    windowed_loud_spec = []
+    windowed_rms = []
+    weighted_vals = []
+
+    for i in range(windowed_samples.shape[0]):
+        samples = windowed_samples[i, :]
+        N_entire, N_single = specific_loudness(samples, Pref=100.0, fs=fs, Mod=0)
+
+        # append the loudness spec
+        windowed_loud_spec.append(N_single)
+        windowed_rms.append(np.sqrt(np.mean(samples * samples)))
+        weighted_vals.append(np.sum(weight_array * N_single))
+
+    mean_weight = np.mean(weighted_vals)
+    weighted_weight = np.average(weighted_vals, weights=windowed_rms)
+
+    return mean_weight, weighted_weight
+
+
+
+'''
+  Loudnorm function to be included in future update
+'''
+# def loud_norm(audio, fs=44100, target_loudness=-24.0):
+#     '''
+#       Takes in audio data and returns the same audio loudness normalised
+#     :param audio:
+#     :param fs:
+#     :param target_loudness:
+#     :return:
+#     '''
+#     meter = pyln.Meter(fs)
+#     current_loudness = meter.integrated_loudness(audio)
+#     normalised_audio = pyln.normalize.loudness(audio, current_loudness, target_loudness)
+#     return normalised_audio
 
 
 

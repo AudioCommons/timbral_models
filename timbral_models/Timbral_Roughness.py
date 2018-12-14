@@ -5,6 +5,13 @@ from . import timbral_util
 
 
 def plomp(f1, f2):
+    """
+      Plomp's algorithm for estimating roughness.
+
+    :param f1:  float, frequency of first frequency of the pair
+    :param f2:  float, frequency of second frequency of the pair
+    :return:
+    """
     b1 = 3.51
     b2 = 5.75
     xstar = 0.24
@@ -20,45 +27,49 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
      This function is an implementation of the Vassilakis [2007] model of roughness.
      The peak picking algorithm implemented is based on the MIR toolbox's implementation.
 
-     Version 0.2
+     This version of timbral_roughness relates to D5.7.
+     Version 0.3
 
 
      Vassilakis, P. 'SRA: A Aeb-based researh tool for spectral and roughness analysis of sound signals', Proceedings
      of the 4th Sound and Music Computing Conference, Lefkada, Greece, July, 2007.
 
-    Required parameter
-    :param fname:                   Audio filename to be analysed, including full file path and extension.
+     Required parameter
+      :param fname:                 string, Audio filename to be analysed, including full file path and extension.
 
-    Optional parameters
-    :param dev_output:              Bool, when False return the roughness, when True return all extracted features
+     Optional parameters
+      :param dev_output:            bool, when False return the roughness, when True return all extracted features
                                     (current none).
-    :param phase_correction:        If the inter-channel phase should be estimated when performing a mono sum.
+      :param phase_correction:      bool, if the inter-channel phase should be estimated when performing a mono sum.
                                     Defaults to False.
 
-    :return:        Roughness of the audio signal.
+      :return:                      Roughness of the audio signal.
 
-    Copyright 2018 Andy Pearce
+     Copyright 2018 Andy Pearce
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+     Licensed under the Apache License, Version 2.0 (the "License");
+     you may not use this file except in compliance with the License.
+     You may obtain a copy of the License at
 
        http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+     Unless required by applicable law or agreed to in writing, software
+     distributed under the License is distributed on an "AS IS" BASIS,
+     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+     See the License for the specific language governing permissions and
+     limitations under the License.
     """
     # use pysoundfile to read audio
     audio_samples, fs = sf.read(fname, always_2d=False)
-
+    # reduce to mono
     audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
 
-    audio_samples /= np.max(np.abs(audio_samples))
+    # pad audio
+    audio_samples = np.lib.pad(audio_samples, (512, 0), 'constant', constant_values=(0.0, 0.0))
 
-
+    '''
+      Reshape audio into time windows of 50ms.
+    '''
     # reshape audio
     audio_len = len(audio_samples)
     time_step = 0.05
@@ -97,11 +108,11 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
 
     freq = fs/2 * np.linspace(0, 1, spec_len)
 
-    # normalise
+    # normalise spectrogram based from peak TF bin
     norm_spec = (spec - np.min(spec)) / (np.max(spec) - np.min(spec))
 
     ''' Peak picking algorithm '''
-    cthr = 0.01  # threshold for peak picking
+    cthr = 0.001  # threshold for peak picking
 
     _, no_segments = np.shape(spec)
 
@@ -120,7 +131,7 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
         allpeaklevel.append(peak_level)
         allpeaktime.append(peak_x)
 
-    ''' get the roughness '''
+    ''' Calculate the Vasillakis Roughness '''
     allroughness = []
     # for each frame
     for frame in range(len(allpeaklevel)):
@@ -147,6 +158,6 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
     if dev_output:
         return [mean_roughness]
     else:
-        return mean_roughness
+        return np.log10(mean_roughness)
 
 
