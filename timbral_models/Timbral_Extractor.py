@@ -5,7 +5,7 @@ import six
 from . import timbral_util, timbral_hardness, timbral_depth, timbral_brightness, timbral_roughness, timbral_warmth, \
     timbral_sharpness, timbral_booming, timbral_reverb
 
-def timbral_extractor(fname, fs=0, dev_output=False, phase_correction=False, clip_output=False, output_type='dictionary'):
+def timbral_extractor(fname, fs=0, dev_output=False, phase_correction=False, clip_output=False, output_type='dictionary', verbose=True):
     """
       The Timbral Extractor will extract all timbral attribute sin one function call, returning the results as either
       a list or dictionary, depending on input definitions.
@@ -65,42 +65,50 @@ def timbral_extractor(fname, fs=0, dev_output=False, phase_correction=False, cli
     audio_samples, fs = timbral_util.check_upsampling(audio_samples, fs)
 
     # functions can be given audio samples as well
-    print('Calculating hardness...')
+    if verbose:
+        print('Calculating hardness...')
     hardness = timbral_hardness(audio_samples, fs=fs,
                                 dev_output=dev_output,
                                 phase_correction=phase_correction,
                                 clip_output=clip_output)
-    print('Calculating depth...')
+    if verbose:
+        print('Calculating depth...')
     depth = timbral_depth(audio_samples, fs=fs,
                           dev_output=dev_output,
                           phase_correction=phase_correction,
                           clip_output=clip_output)
-    print('Calculating brightness...')
+    if verbose:
+        print('Calculating brightness...')
     brightness = timbral_brightness(audio_samples, fs=fs,
                                     dev_output=dev_output,
                                     phase_correction=phase_correction,
                                     clip_output=clip_output)
-    print('Calculating roughness...')
+    if verbose:
+        print('Calculating roughness...')
     roughness = timbral_roughness(audio_samples, fs=fs,
                                   dev_output=dev_output,
                                   phase_correction=phase_correction,
                                   clip_output=clip_output)
-    print('Calculating warmth...')
+    if verbose:
+        print('Calculating warmth...')
     warmth = timbral_warmth(audio_samples, fs=fs,
                             dev_output=dev_output,
                             phase_correction=phase_correction,
                             clip_output=clip_output)
-    print('Calculating sharpness...')
+    if verbose:
+        print('Calculating sharpness...')
     sharpness = timbral_sharpness(audio_samples, fs=fs,
                                   dev_output=dev_output,
                                   phase_correction=phase_correction,
                                   clip_output=clip_output)
-    print('Calculating boominess...')
+    if verbose:
+        print('Calculating boominess...')
     boominess = timbral_booming(audio_samples, fs=fs,
                                 dev_output=dev_output,
                                 phase_correction=phase_correction,
                                 clip_output=clip_output)
-    print('Calculating reverb...')
+    if verbose:
+        print('Calculating reverb...')
     # reverb calculated on all channels
     reverb = timbral_reverb(multi_channel_audio, fs=fs)
 
