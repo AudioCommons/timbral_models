@@ -4,13 +4,14 @@ import librosa
 import soundfile as sf
 from scipy.signal import butter, lfilter, spectrogram
 import scipy.stats
-# import pyloudnorm as pyln
+import pyloudnorm as pyln
+import six
 
 """
   The timbral util is a collection of functions that can be accessed by the individual timbral models.  These can be 
   used for extracting features or manipulating the audio that are useful to multiple attributes.
   
-  Version 0.3 
+  Version 0.4 
   
   Copyright 2018 Andy Pearce
 
@@ -70,13 +71,15 @@ def get_percussive_audio(audio_samples, return_ratio=True):
 
         #get the ratio for each RMS time frame
         for i in range(len(percussive_energy)):
-            if percussive_energy[i] != 0 and harmonic_energy[i] != 0:
+            if percussive_energy[i] != 0 or harmonic_energy[i] != 0:
+            # if percussive_energy[i] != 0 and harmonic_energy[i] != 0:
                 ratio.append(percussive_energy[i] / (percussive_energy[i] + harmonic_energy[i]))
                 t_power.append((percussive_energy[i] + harmonic_energy[i]))
 
-        # take a weighted average of the ratio
-        ratio = np.average(ratio, weights=t_power)
-        return ratio
+        if t_power:
+            # take a weighted average of the ratio
+            ratio = np.average(ratio, weights=t_power)
+            return ratio
     else:
         # return the percussive audio when return_ratio is False
         return percussive_audio
@@ -1075,7 +1078,7 @@ def channel_reduction(audio_samples, phase_correction=False):
     :param audio_samples:       audio samples
     :param phase_correction:    perform phase checking on channels before mono sum
 
-    :return:                    udio samples summed to mono
+    :return:                    audio samples summed to mono
     """
     # get sum all channels to mono
     num_channels = np.shape(audio_samples)
@@ -1152,6 +1155,10 @@ def filter_design2(Fc, fs, N):
     f2 = (2.0 ** (1.0/6)) * Fc
     f1 = f1 / (fs / 2.0)
     f2 = f2 / (fs / 2.0)
+
+    # force f2 to be 1.0 for cases where the upper bandwidth from 3rd_octave_downsample produce higher frequencies
+    if f2 >= 1.0:
+        f2 = 0.9999999999
     b, a = scipy.signal.butter(N, [f1, f2], 'bandpass')
     return b, a
 
@@ -1176,6 +1183,11 @@ def midbands(Fmin, Fmax, fs):
 
     A = np.where(lab_freq == Fmin)[0][0]
     B = np.where(lab_freq == Fmax)[0][0]
+
+    # compare value of B to nyquist
+    while lab_freq[B] > Nyquist_frequency:
+        B -= 1
+
 
     j = i[np.arange(A, B+1, 1)] # indices to find exact midband frequencies
     ff = (2.0 ** (j / 3.0)) * fr # Exact midband frequencies (Calculated as base two exact)
@@ -1214,7 +1226,10 @@ def filter_third_octaves_downsample(x, Pref, fs, Fmin, Fmax, N):
             Bl = B;
             Al = A;
         y = scipy.signal.lfilter(B, A, x);
-        P[i] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0) / m)) # Convert to decibels.
+        if np.max(y) > 0:
+            P[i] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0) / m)) # Convert to decibels.
+        else:
+            P[i] = -1.0 * np.inf
 
     # 5000 Hz or lower, multirate filter implementation.
     try:
@@ -1231,11 +1246,20 @@ def filter_third_octaves_downsample(x, Pref, fs, Fmin, Fmax, N):
             m = len(x)
             # Performs the filtering
             y = scipy.signal.lfilter(Bu, Au, x)
-            P[i] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0)/m))
+            if np.max(y) > 0:
+                P[i] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0)/m))
+            else:
+                P[i] = -1.0 * np.inf
             y = scipy.signal.lfilter(Bc, Ac, x)
-            P[i-1] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0)/m))
+            if np.max(y) > 0:
+                P[i-1] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0)/m))
+            else:
+                P[i-1] = -1.0 * np.inf
             y = scipy.signal.lfilter(Bl, Al, x)
-            P[i-2] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0)/m))
+            if np.max(y) > 0:
+                P[i - 2] = 20 * np.log10(np.sqrt(np.sum(y ** 2.0) / m))
+            else:
+                P[i-2] = -1.0 * np.inf
     except:
         P = P[1:len(j)]
 
@@ -1245,7 +1269,10 @@ def filter_third_octaves_downsample(x, Pref, fs, Fmin, Fmax, N):
     # log transformation
     Plog = 10 ** (P / 10.0)
     Ptotal = np.sum(Plog)
-    Ptotal = 10 * np.log10(Ptotal)
+    if Ptotal > 0:
+        Ptotal = 10 * np.log10(Ptotal)
+    else:
+        Ptotal = -1.0 * np.inf
 
     return Ptotal, P, F
 
@@ -1364,7 +1391,10 @@ def specific_loudness(x, Pref, fs, Mod):
     Gi[1] = np.sum(Ti[6:9]) # Gi(2) is the second critical band (sum of octave(100Hz to 160Hz))
     Gi[2] = np.sum(Ti[9:11]) # Gi(3) is the third critical band (sum of two third octave bands(200Hz to 250Hz))
 
-    FNGi = 10 * np.log10(Gi)
+    if np.max(Gi) > 0.0:
+        FNGi = 10 * np.log10(Gi)
+    else:
+        FNGi = -1.0 * np.inf
     LCB = np.zeros_like(Gi)
     for i in range(3):
         if Gi[i] > 0:
@@ -1634,80 +1664,6 @@ def isodd(num):
     return num & 0x1
 
 
-'''
-  This function removed because it utilises essentia
-'''
-# def gammatonegram(audio_samples, fs, twin=0.025, thop=0.01, N=64, fmin=50, fmax=None, return_scale='Hz',
-#                   return_step_size=False, return_db=True):
-#     """
-#       Returns a gammatone spectrogram based off the code from [1], using essentia implementation for gammatone filter
-#       calculation.  Note that this approximates gammatone filters for computartional efficiency.
-#
-#       [1] http://www.ee.columbia.edu/~dpwe/resources/matlab/gammatonegram/
-#
-#     :param audio:
-#     :param fs:
-#     :param twin:
-#     :param thop:
-#     :param N:
-#     :param fmin:
-#     :param fmax:
-#     :return:
-#     """
-#     from essentia.standard import ERBBands
-#     from essentia import array as es_array
-#
-#     if fmax == None:
-#         fmax = fs/2
-#
-#     twin_samples = fs * twin
-#     thop_samples = fs * thop  # this may cause some issues with strange sample rates, haven't tested
-#     nperseg = int(2 ** (np.ceil(np.log2(twin_samples))))  # calculate closest power of 2
-#     noverlap = nperseg - thop_samples
-#
-#     # get spectrogram based on perameters defined
-#     f, t, spec = spectrogram(audio_samples, fs, window='boxcar', nperseg=nperseg, noverlap=noverlap, scaling='density',
-#                              mode='magnitude')
-#     gammagram = np.zeros((N, len(t)))
-#
-#     # initialise the function
-#     ToERBS = ERBBands(highFrequencyBound=fmax, inputSize=spec.shape[0], lowFrequencyBound=fmin, numberBands=N, sampleRate=fs,
-#                       type='magnitude')
-#
-#     for time in range(len(t)):
-#         this_spec = es_array(spec[:,time])
-#         x = ToERBS(this_spec)
-#         gammagram[:,time] = np.array(x)
-#
-#     # calculate gammatone frequency scale
-#     EarQ = 9.26449
-#     minBW = 24.7
-#     order = 1
-#     nfilts = N
-#     maxfreq = fmax
-#     minfreq = fmin
-#
-#     fls = np.exp(np.arange(1, nfilts + 1) * (
-#                 (-1.0 * np.log(maxfreq + EarQ * minBW)) + np.log(minfreq + EarQ * minBW)) / nfilts) * (
-#                     maxfreq + EarQ * minBW) - (EarQ * minBW)
-#
-#     if return_scale == 'kHz':
-#         fls = fls / 1000.0  # convert to kHz
-#     elif return_scale == 'Bark':
-#         # fls = fls / 1000.0  # convert to kHz
-#         fls = 13 * np.arctan(0.00076 * fls) + 3.5 * np.arctan((fls / 7500.0)**2.0)
-#
-#     elif return_scale == 'ERB':
-#         fls = fls / 1000.0  # convert to kHz
-#         fls = 24.7 * (4.37 * fls + 1)  # convert to ERB with equation from Moore and Glasberg [1983]
-#
-#     if return_step_size:
-#         return fls, t, gammagram, noverlap
-#     else:
-#         return fls, t, gammagram
-
-
-
 def window_audio(audio_samples, window_length=4096):
     """
       Segment the audio samples into a numpy array the correct size and shape, so that each row is a new window of audio
@@ -1767,20 +1723,94 @@ def weighted_bark_level(audio_samples, fs, low_bark_band=0, upper_bark_band=240)
 '''
   Loudnorm function to be included in future update
 '''
-# def loud_norm(audio, fs=44100, target_loudness=-24.0):
-#     '''
-#       Takes in audio data and returns the same audio loudness normalised
-#     :param audio:
-#     :param fs:
-#     :param target_loudness:
-#     :return:
-#     '''
-#     meter = pyln.Meter(fs)
-#     current_loudness = meter.integrated_loudness(audio)
-#     normalised_audio = pyln.normalize.loudness(audio, current_loudness, target_loudness)
-#     return normalised_audio
+def loud_norm(audio, fs=44100, target_loudness=-24.0):
+    '''
+      Takes in audio data and returns the same audio loudness normalised
+    :param audio:
+    :param fs:
+    :param target_loudness:
+    :return:
+    '''
+    meter = pyln.Meter(fs)
+
+    # minimum length of file is 0.4 seconds
+    if len(audio) < (fs * 0.4):
+        # how much longer does the file need to be?
+        samples_needed = int(fs * 0.4) - len(audio)
+
+        # zero pad signal
+        len_check_audio = np.pad(audio, (0, samples_needed), 'constant', constant_values=0.0)
+    else:
+        len_check_audio = audio
+
+    # assess the current loudness
+    current_loudness = meter.integrated_loudness(len_check_audio)
+    normalised_audio = pyln.normalize.loudness(audio, current_loudness, target_loudness)
+
+    # check for clipping and reduce level
+    if np.max(np.abs(normalised_audio)) > 1.0:
+        normalised_audio /= np.max(np.abs(normalised_audio))
+
+    return normalised_audio
 
 
 
 
 
+def file_read(fname, fs=0, phase_correction=False, mono_sum=True, loudnorm=True, resample_low_fs=True):
+    """
+      Read in audio file, but check if it's already an array
+      Return samples if already an array.
+    :param fname:
+    :return:
+    """
+    if isinstance(fname, six.string_types):
+        # use pysoundfile to read audio
+        audio_samples, fs = sf.read(fname, always_2d=False)
+
+    elif hasattr(fname, 'shape'):
+        if fs==0:
+            raise ValueError('If giving function an array, \'fs\' must be specified')
+        audio_samples = fname
+
+    else:
+        raise TypeError('Input type of \'fname\' must be string, or have a shape attribute (e.g. a numpy array)')
+
+    # check audio file contains data
+    if audio_samples.size==0:
+        raise ValueError('Input audio file does not contain data')
+
+    # reduce to mono
+    if mono_sum:
+        audio_samples = channel_reduction(audio_samples, phase_correction)
+
+    # check data has values
+    if np.max(np.abs(audio_samples)) == 0.0:
+        raise ValueError('Input file is silence, cannot be analysed.')
+
+    # loudness normalise
+    if loudnorm:
+        audio_samples = loud_norm(audio_samples, fs, target_loudness=-24.0)
+
+    if resample_low_fs:
+        # check if upsampling required and perform to avoid errors
+        audio_samples, fs = check_upsampling(audio_samples, fs)
+
+    return audio_samples, fs
+
+
+
+def check_upsampling(audio_samples, fs, lowest_fs=44100):
+    """
+      Check if upsampling needfs to be applied, then perform it if necessary
+
+    :param audio_samples:
+    :param fs:
+    :return:
+    """
+    if fs < lowest_fs:
+        # upsample file to avoid errors when calculating specific loudness
+        audio_samples = librosa.core.resample(audio_samples, fs, lowest_fs)
+        fs = lowest_fs
+
+    return audio_samples, fs

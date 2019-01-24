@@ -5,7 +5,7 @@ This document contains the version history for the timbral models.  The latest v
 
 ## Current version
 
-The current version of the software was used in conjunction with D5.3 Evaluation report on the first prototypes of the timbral characterisation tools.
+The current version of the software was used in conjunction with D5.8 Release of timbral characterisation tools for semantically annotating non-musical content.
 
 This is available: http://www.audiocommons.org/materials/
 
@@ -13,11 +13,17 @@ This is available: http://www.audiocommons.org/materials/
 
 ## Past versions
 
-Apr 27, 2017 - This committed version relates to the deliverable D5.2 First prototype of timbral characterisation tools for semantically annotating non-musical content.  
+2019/01/24 - Version 0.4 of timbral_models, relates to Audio Commons Deliverable D5.8.  This version of the repository relates to the software version 0.4 on PyPI.
 
-Jul 26, 2018 - This committed version relates to the deliverable D5.6 Second prototype of timbral characterisation tools for semantically annotating non-musical content.
+2018/12/14 - Version 0.3 of timbral models, relates to Audio Commons Deliverable D5.7. This version of the repository relates to the software version 0.3 on PyPI.
+
+2018/07/26 - Version 0.2 of timbral models, relates to Audio Commons Deliverable D5.6.  This version of the repository relates to the software version 0.2 on PyPI. 
+
+2017/09/05 - Version 0.1 of timbral models, relates to Audio Commons Deliverable D5.3.  This version of the repository relates to the software version 0.1 on PyPI.
+
+2017/04/27 - Version 0.0 of the timbral models, relates to Audio Commons Deliverable D5.2.
 
 
-This deliverable is available: http://www.audiocommons.org/materials/
+The deliverables are available: http://www.audiocommons.org/materials/
 
 

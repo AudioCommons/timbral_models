@@ -6,19 +6,24 @@ import scipy.stats
 from . import timbral_util
 
 
-def timbral_depth(fname, dev_output=False, phase_correction=False, clip_output=False, threshold_db=-60,
+def timbral_depth(fname, fs=0, dev_output=False, phase_correction=False, clip_output=False, threshold_db=-60,
                   low_frequency_limit=20, centroid_crossover_frequency=2000, ratio_crossover_frequency=500,
                   db_decay_threshold=-40):
     """
      This function calculates the apparent Depth of an audio file.
-     This version of timbral_brightness relates to D5.7.
+     This version of timbral_depth contains self loudness normalising methods and can accept arrays as an input
+     instead of a string filename.
 
-     Version 0.3
+     Version 0.4
 
-     Required parameters
-      :param fname:                        string, Audio filename to be analysed, including full file path and extension.
+     Required parameter
+      :param fname:                        string or numpy array
+                                           string, audio filename to be analysed, including full file path and extension.
+                                           numpy array, array of audio samples, requires fs to be set to the sample rate.
 
      Optional parameters
+      :param fs:                           int/float, when fname is a numpy array, this is a required to be the sample rate.
+                                           Defaults to 0.
       :param phase_correction:             bool, perform phase checking before summing to mono.  Defaults to False.
       :param dev_output:                   bool, when False return the depth, when True return all extracted
                                            features.  Default to False.
@@ -50,12 +55,14 @@ def timbral_depth(fname, dev_output=False, phase_correction=False, clip_output=F
      See the License for the specific language governing permissions and
      limitations under the License.
     """
-    # use pysoundfile to read audio
-    audio_samples, fs = sf.read(fname, always_2d=False)
+    '''
+      Read input
+    '''
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
 
-    # reduce to mono
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
-
+    '''
+      Filter audio
+    '''
     # highpass audio - run 3 times to get -18dB per octave - unstable filters produced when using a 6th order
     audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
     audio_samples = timbral_util.filter_audio_highpass(audio_samples, crossover=low_frequency_limit, fs=fs)
@@ -80,14 +87,32 @@ def timbral_depth(fname, dev_output=False, phase_correction=False, clip_output=F
 
     # set FFT parameters
     nfft = 4096
-    hop_size = 3 * nfft / 4
+    hop_size = int(3 * nfft / 4)
     # get spectrogram
-    freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft, hop_size, nfft, 'constant', True, 'spectrum')
-    lp_centroid_freq, lp_centroid_time, lp_centroid_spec = spectrogram(lowpass_centroid_audio_samples, fs, 'hamming',
-                                                                       nfft, hop_size, nfft, 'constant', True,
-                                                                       'spectrum')
-    lp_ratio_freq, lp_ratio_time, lp_ratio_spec = spectrogram(lowpass_ratio_audio_samples, fs, 'hamming', nfft,
-                                                              hop_size, nfft, 'constant', True, 'spectrum')
+    if len(audio_samples) > nfft:
+        freq, time, spec = spectrogram(audio_samples, fs, 'hamming', nfft, hop_size,
+                                       nfft, 'constant', True, 'spectrum')
+        lp_centroid_freq, lp_centroid_time, lp_centroid_spec = spectrogram(lowpass_centroid_audio_samples, fs,
+                                                                           'hamming', nfft, hop_size, nfft,
+                                                                           'constant', True, 'spectrum')
+        lp_ratio_freq, lp_ratio_time, lp_ratio_spec = spectrogram(lowpass_ratio_audio_samples, fs, 'hamming', nfft,
+                                                                  hop_size, nfft, 'constant', True, 'spectrum')
+
+    else:
+        # file is shorter than 4096, just take the fft
+        freq, time, spec = spectrogram(audio_samples, fs, 'hamming', len(audio_samples), len(audio_samples)-1,
+                                       nfft, 'constant', True, 'spectrum')
+        lp_centroid_freq, lp_centroid_time, lp_centroid_spec = spectrogram(lowpass_centroid_audio_samples, fs,
+                                                                           'hamming',
+                                                                           len(lowpass_centroid_audio_samples),
+                                                                           len(lowpass_centroid_audio_samples)-1,
+                                                                           nfft, 'constant', True, 'spectrum')
+        lp_ratio_freq, lp_ratio_time, lp_ratio_spec = spectrogram(lowpass_ratio_audio_samples, fs, 'hamming',
+                                                                  len(lowpass_ratio_audio_samples),
+                                                                  len(lowpass_ratio_audio_samples)-1,
+                                                                  nfft, 'constant', True, 'spectrum')
+
+
 
     threshold = timbral_util.db2mag(threshold_db)
 
@@ -100,7 +125,7 @@ def timbral_depth(fname, dev_output=False, phase_correction=False, clip_output=F
     all_normalised_centroid_tpower = []
 
     # get metrics for each time segment of the spectrogram
-    for idx in range(1, len(time)):
+    for idx in range(len(time)):
         # get overall spectrum of time frame
         current_spectrum = spec[:, idx]
         # calculate time window power
@@ -140,7 +165,7 @@ def timbral_depth(fname, dev_output=False, phase_correction=False, clip_output=F
     all_normalised_ratio_tpower = []
 
     # get metrics for each time segment of the spectrogram
-    for idx in range(1, len(time)):
+    for idx in range(len(time)):
         # get time frame of broadband spectrum
         current_spectrum = spec[:, idx]
         tpower = np.sum(current_spectrum)

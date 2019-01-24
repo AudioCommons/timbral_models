@@ -2,25 +2,31 @@ from __future__ import division
 import numpy as np
 import librosa
 import soundfile as sf
+import six
 from scipy.signal import spectrogram
 from . import timbral_util
 
-def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_output=False, max_attack_time=0.1,
+def timbral_hardness(fname, fs=0, dev_output=False, phase_correction=False, clip_output=False, max_attack_time=0.1,
                      bandwidth_thresh_db=-75):
     """
      This function calculates the apparent hardness of an audio file.
-     This version of timbral_hardness relates to D5.7.
-     Version 0.3
+     This version of timbral_hardness contains self loudness normalising methods and can accept arrays as an input
+     instead of a string filename.
 
-      Required parameters
-      :param fname:                 string, Audio filename to be analysed, including full file path and extension.
+     Version 0.4
 
-      Optional parameters
-      :param dev_output:            bool, when False return the hardness, when True return all extracted features.
-      :param phase_correction:      bool, if the inter-channel phase should be estimated when performing a mono sum.
-                                    Defaults to False.
-      :param clip_output:           bool, should the output be clipped between 0 and 100 (limits of the subjective test
-                                    results used for training the model). Defaults to False.
+     Required parameter
+      :param fname:                 string or numpy array
+                                    string, audio filename to be analysed, including full file path and extension.
+                                    numpy array, array of audio samples, requires fs to be set to the sample rate.
+
+     Optional parameters
+      :param fs:                    int/float, when fname is a numpy array, this is a required to be the sample rate.
+                                    Defaults to 0.
+      :param phase_correction:      bool, perform phase checking before summing to mono.  Defaults to False.
+      :param dev_output:            bool, when False return the depth, when True return all extracted
+                                    features.  Default to False.
+      :param clip_output:           bool, force the output to be between 0 and 100.
       :param max_attack_time:       float, set the maximum attack time, in seconds.  Defaults to 0.1.
       :param bandwidth_thresh_db:   float, set the threshold for calculating the bandwidth, Defaults to -75dB.
 
@@ -45,13 +51,9 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
     """
 
     '''
-      Basic audio file reading in
+      Read input
     '''
-    # use pysoundfile to read audio
-    audio_samples, fs = sf.read(fname, always_2d=False)
-
-    # reduce to mono
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction)
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
 
     '''
       Calculate the midband level
@@ -84,6 +86,15 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
     # calculate the onsets
     original_onsets = timbral_util.calculate_onsets(audio_samples, envelope, fs, nperseg=nperseg)
     onset_strength = librosa.onset.onset_strength(audio_samples, fs)
+    # If onsets don't exist, set it to time zero
+    if not original_onsets:
+        original_onsets = [0]
+    # set to start of file in the case where there is only one onset
+    if len(original_onsets) == 1:
+        original_onsets = [0]
+
+    onsets = np.array(original_onsets) - nperseg
+    onsets[onsets < 0] = 0
 
     '''
       Calculate the spectrogram so that the bandwidth can be created
@@ -108,15 +119,6 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
     '''
       Get bandwidth onset times and max bandwidth
     '''
-    # If onsets don't exist, set it to time zero
-    if not original_onsets:
-        original_onsets = [0]
-    # set to start of file in the case where there is only one onset
-    if len(original_onsets) == 1:
-        original_onsets = [0]
-
-    onsets = np.array(original_onsets) - nperseg
-    onsets[onsets < 0] = 0
     bandwidth_onset = np.array(onsets / float(bandwidth_step_size)).astype('int')  # overlap_step=128
 
     '''
@@ -134,28 +136,32 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
             next_onset = bandwidth_onset[onset_count + 1]
             bandwidth_seg = np.array(bandwidth[onset:next_onset])
 
-        # making a copy of the bandqwidth segment to avoid array changes
-        hold_bandwidth_seg = list(bandwidth_seg)
-
-        # calculate onset of the attack in the bandwidth array
         if max(bandwidth_seg) > 0:
-            bandwidth_attack = timbral_util.calculate_attack_time(bandwidth_seg, bandwidth_fs,
-                                                                  calculation_type='fixed_threshold',
-                                                                  max_attack_time=max_attack_time)
-        else:
-            bandwidth_attack = []
+            # making a copy of the bandqwidth segment to avoid array changes
+            hold_bandwidth_seg = list(bandwidth_seg)
 
-        # calculate the badiwdth max for the attack portion
-        if bandwidth_attack:
-            start_idx = bandwidth_attack[2]
-            if max_attack_time > 0:
-                max_attack_time_samples = int(max_attack_time * bandwidth_fs)
-                if len(hold_bandwidth_seg[start_idx:]) > start_idx+max_attack_time_samples:
-                    all_bandwidth_max.append(max(hold_bandwidth_seg[start_idx:start_idx+max_attack_time_samples]))
+            # calculate onset of the attack in the bandwidth array
+            if max(bandwidth_seg) > 0:
+                bandwidth_attack = timbral_util.calculate_attack_time(bandwidth_seg, bandwidth_fs,
+                                                                      calculation_type='fixed_threshold',
+                                                                      max_attack_time=max_attack_time)
+            else:
+                bandwidth_attack = []
+
+            # calculate the badiwdth max for the attack portion
+            if bandwidth_attack:
+                start_idx = bandwidth_attack[2]
+                if max_attack_time > 0:
+                    max_attack_time_samples = int(max_attack_time * bandwidth_fs)
+                    if len(hold_bandwidth_seg[start_idx:]) > start_idx+max_attack_time_samples:
+                        all_bandwidth_max.append(max(hold_bandwidth_seg[start_idx:start_idx+max_attack_time_samples]))
+                    else:
+                        all_bandwidth_max.append(max(hold_bandwidth_seg[start_idx:]))
                 else:
                     all_bandwidth_max.append(max(hold_bandwidth_seg[start_idx:]))
-            else:
-                all_bandwidth_max.append(max(hold_bandwidth_seg[start_idx:]))
+        else:
+            # set as blank so bandwith
+            bandwidth_attack = []
 
         '''
           Calculate the attack time
@@ -163,7 +169,7 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
         onset = original_onsets[onset_count]
         if onset == original_onsets[-1]:
             attack_seg = np.array(envelope[onset:])
-            strength_seg = np.array(onset_strength[int(onset/512):])
+            strength_seg = np.array(onset_strength[int(onset/512):])  # 512 is librosa default window size
             audio_seg = np.array(audio_samples[onset:])
         else:
             attack_seg = np.array(envelope[onset:original_onsets[onset_count + 1]])
@@ -194,13 +200,15 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
         else:
             audio_seg = audio_seg[th_start_idx:th_start_idx + centroid_int_samples]
 
-        # get all spectral features for this attack section
-        spectral_features_hold = timbral_util.get_spectral_features(audio_seg, fs)
+        # check that there's a suitable legnth of samples to get attack centroid
+        # minimum length arbitrarily set to 512 samples
+        if len(audio_seg) > 512:
+            # get all spectral features for this attack section
+            spectral_features_hold = timbral_util.get_spectral_features(audio_seg, fs)
 
-        # store unitless attack centroid if exists
-        if spectral_features_hold:
-            all_attack_centroid.append(spectral_features_hold[0])
-            # all_attack_unitless_centroid.append(spectral_features_hold[2])
+            # store unitless attack centroid if exists
+            if spectral_features_hold:
+                all_attack_centroid.append(spectral_features_hold[0])
 
     '''
       Calculate mean and weighted average values for features
@@ -209,19 +217,26 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
     mean_attack_time = np.mean(all_attack_time)
 
     # get the weighted mean of bandwidth max and limit lower value
-    mean_weighted_bandwidth_max = np.average(all_bandwidth_max, weights=all_max_strength_bandwidth)
-
-    # check for zero values so the log bandwidth max can be taken
-    if mean_weighted_bandwidth_max <= 512.0:
+    if len(all_bandwidth_max):
+        mean_weighted_bandwidth_max = np.average(all_bandwidth_max, weights=all_max_strength_bandwidth)
+        # check for zero values so the log bandwidth max can be taken
+        if mean_weighted_bandwidth_max <= 512.0:
+            mean_weighted_bandwidth_max = fs / 512.0  # minimum value
+    else:
         mean_weighted_bandwidth_max = fs / 512.0  # minimum value
 
+    # take the logarithm
     log_weighted_bandwidth_max = np.log10(mean_weighted_bandwidth_max)
 
     # get the mean of the onset strenths
     mean_max_strength = np.mean(all_max_strength)
     log_mean_max_strength = np.log10(mean_max_strength)
 
-    mean_attack_centroid = np.mean(all_attack_centroid)
+    if all_attack_centroid:
+        mean_attack_centroid = np.mean(all_attack_centroid)
+    else:
+        mean_attack_centroid = 200.0
+
     # limit the lower limit of the attack centroid to allow for log to be taken
     if mean_attack_centroid <= 200:
         mean_attack_centroid = 200.0
@@ -244,7 +259,11 @@ def timbral_hardness(fname, dev_output=False, phase_correction=False, clip_outpu
         all_metrics[4] = log_mean_max_strength
         all_metrics[5] = mean_attack_time
 
-        coefficients = np.array([13.5330599736, 18.1519030059, 13.1679266873, 5.03134507433, 5.22582123237, -3.71046018962, -89.8935449357])
+        # coefficients = np.array([13.5330599736, 18.1519030059, 13.1679266873, 5.03134507433, 5.22582123237, -3.71046018962, -89.8935449357])
+
+        # recalculated values when using loudnorm
+        coefficients = np.array([12.079781720638145, 18.52100377170042, 14.139883645260355, 5.567690321917516,
+                                 3.9346817690405635, -4.326890461087848, -85.60352209068202])
 
         hardness = np.sum(all_metrics * coefficients)
 

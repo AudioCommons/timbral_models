@@ -5,4 +5,6 @@ from .Timbral_Roughness import timbral_roughness
 from .Timbral_Warmth import timbral_warmth
 from .Timbral_Sharpness import timbral_sharpness
 from .Timbral_Booming import timbral_booming
+from .Timbral_Reverb import timbral_reverb
+from .Timbral_Extractor import timbral_extractor
 from .timbral_util import *

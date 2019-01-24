@@ -22,13 +22,15 @@ def plomp(f1, f2):
     return pd
 
 
-def timbral_roughness(fname, dev_output=False, phase_correction=False):
+def timbral_roughness(fname, dev_output=False, phase_correction=False, clip_output=False, fs=0, peak_picking_threshold=0.01):
     """
      This function is an implementation of the Vassilakis [2007] model of roughness.
      The peak picking algorithm implemented is based on the MIR toolbox's implementation.
 
-     This version of timbral_roughness relates to D5.7.
-     Version 0.3
+     This version of timbral_roughness contains self loudness normalising methods and can accept arrays as an input
+     instead of a string filename.
+
+     Version 0.4
 
 
      Vassilakis, P. 'SRA: A Aeb-based researh tool for spectral and roughness analysis of sound signals', Proceedings
@@ -59,11 +61,14 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
      See the License for the specific language governing permissions and
      limitations under the License.
     """
-    # use pysoundfile to read audio
-    audio_samples, fs = sf.read(fname, always_2d=False)
-    # reduce to mono
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
+    '''
+      Read input
+    '''
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
 
+    '''
+      Pad audio
+    '''
     # pad audio
     audio_samples = np.lib.pad(audio_samples, (512, 0), 'constant', constant_values=(0.0, 0.0))
 
@@ -87,19 +92,24 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
     i = 0
     start_idx = int((i * (nfft / 2.0)))
 
-    # get all the audio
-    while start_idx+step_samples <= audio_len:
-        audio_frame = audio_samples[start_idx:start_idx+step_samples]
+    # check if audio is too short to be reshaped
+    if audio_len > step_samples:
+        # get all the audio
+        while start_idx+step_samples <= audio_len:
+            audio_frame = audio_samples[start_idx:start_idx+step_samples]
 
-        # apply window
-        audio_frame = audio_frame * window
+            # apply window
+            audio_frame = audio_frame * window
 
-        # append zeros
-        reshaped_audio[:step_samples, i] = audio_frame
+            # append zeros
+            reshaped_audio[:step_samples, i] = audio_frame
 
-        # increase the step
-        i += 1
-        start_idx = int((i * (nfft / 2.0)))
+            # increase the step
+            i += 1
+            start_idx = int((i * (nfft / 2.0)))
+    else:
+        # reshaped audio is just padded audio samples
+        reshaped_audio[:audio_len, i] = audio_samples
 
     spec = np.fft.fft(reshaped_audio, axis=0)
     spec_len = int(next_pow_2/2) + 1
@@ -112,7 +122,7 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
     norm_spec = (spec - np.min(spec)) / (np.max(spec) - np.min(spec))
 
     ''' Peak picking algorithm '''
-    cthr = 0.001  # threshold for peak picking
+    cthr = peak_picking_threshold  # threshold for peak picking
 
     _, no_segments = np.shape(spec)
 
@@ -158,6 +168,18 @@ def timbral_roughness(fname, dev_output=False, phase_correction=False):
     if dev_output:
         return [mean_roughness]
     else:
-        return np.log10(mean_roughness)
+        '''
+          Perform linear regression
+        '''
+        # cap roughness for low end
+        if mean_roughness < 0.01:
+             return 0
+        else:
+            roughness = np.log10(mean_roughness) * 13.98779569 + 48.97606571545886
+            if clip_output:
+                roughness = timbral_util.output_clip(roughness)
+
+            return roughness
+
 
 

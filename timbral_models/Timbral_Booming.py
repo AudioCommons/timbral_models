@@ -47,7 +47,7 @@ def boominess_calculate(loudspec):
     return BoomingIndex
 
 
-def timbral_booming(fname, dev_output=False, phase_correction=False):
+def timbral_booming(fname, fs=0, dev_output=False, phase_correction=False, clip_output=False):
     """
      This is an implementation of the hasimoto booming index feature.
      There are a few fudge factors with the code to convert between the internal representation of the sound using the
@@ -61,18 +61,25 @@ def timbral_booming(fname, dev_output=False, phase_correction=False):
       evaluating booming sensation", The 29th International congress and Exhibition on Noise Control Engineering, 2000.
 
      This function calculates the apparent Boominess of an audio file.
-     This version of timbral_booming relates to D5.7.
 
-     Version 0.3
+     This version of timbral_booming contains self loudness normalising methods and can accept arrays as an input
+     instead of a string filename.
+
+     Version 0.4
 
      Required parameter
-      :param fname:                   string, audio filename to be analysed, including full file path and extension.
+      :param fname:                   string or numpy array
+                                      string, audio filename to be analysed, including full file path and extension.
+                                      numpy array, array of audio samples, requires fs to be set to the sample rate.
 
      Optional parameters
+      :param fs:                      int/float, when fname is a numpy array, this is a required to be the sample rate.
+                                      Defaults to 0.
       :param dev_output:              bool, when False return the warmth, when True return all extracted features.
                                       Defaults to False.
       :param phase_correction:        bool, if the inter-channel phase should be estimated when performing a mono sum.
                                       Defaults to False.
+      :param clip_output:             bool, force the output to be between 0 and 100.
 
       :return                         float, apparent boominess of the audio file.
 
@@ -90,9 +97,11 @@ def timbral_booming(fname, dev_output=False, phase_correction=False):
      See the License for the specific language governing permissions and
      limitations under the License.
     """
-    # use pysoundfile to read audio
-    audio_samples, fs = sf.read(fname, always_2d=False)
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
+    '''
+      Read input
+    '''
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
+
 
     # window the audio file into 4096 sample sections
     windowed_audio = timbral_util.window_audio(audio_samples, window_length=4096)
@@ -116,10 +125,32 @@ def timbral_booming(fname, dev_output=False, phase_correction=False):
 
         windowed_booming.append(BoomingIndex)
 
-    # get the rms-weighted average
-    rms_boom = np.average(windowed_booming, weights=windowed_rms)
+    # get level of low frequencies
+    ll, w_ll = timbral_util.weighted_bark_level(audio_samples, fs, 0, 70)
+
+    ll = np.log10(ll)
+    # convert to numpy arrays for fancy indexing
+    windowed_booming = np.array(windowed_booming)
+    windowed_rms = np.array(windowed_rms)
+
+    # get the weighted average
+    rms_boom = np.average(windowed_booming, weights=(windowed_rms * windowed_rms))
+    rms_boom = np.log10(rms_boom)
 
     if dev_output:
-        return [rms_boom]
+        return [rms_boom, ll]
     else:
-        return rms_boom
+
+        # perform thye linear regression
+        all_metrics = np.ones(3)
+        all_metrics[0] = rms_boom
+        all_metrics[1] = ll
+
+        coefficients = np.array([43.67402696195865, -10.90054738389845, 26.836530575185435])
+
+        boominess = np.sum(all_metrics * coefficients)
+
+        if clip_output:
+            boominess = timbral_util.output_clip(boominess)
+
+        return boominess

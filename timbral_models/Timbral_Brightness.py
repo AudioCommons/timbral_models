@@ -5,17 +5,23 @@ from . import timbral_util
 from scipy.signal import spectrogram
 
 
-def timbral_brightness(fname, dev_output=False, clip_output=False, phase_correction=False, threshold=0,
+def timbral_brightness(fname, fs=0, dev_output=False, clip_output=False, phase_correction=False, threshold=0,
                        ratio_crossover=2000, centroid_crossover=100, stepSize=1024, blockSize=2048, minFreq=20):
     """
       This function calculates the apparent Brightness of an audio file.
-      This version of timbral_brightness relates to D5.7.
-      Version 0.3
+      This version of timbral_brightness contains self loudness normalising methods and can accept arrays as an input
+      instead of a string filename.
 
-      Required parameters
-       :param fname:               string, audio filename to be analysed, including full file path and extension.
+      Version 0.4
+
+      Required parameter
+       :param fname:               string or numpy array
+                                   string, audio filename to be analysed, including full file path and extension.
+                                   numpy array, array of audio samples, requires fs to be set to the sample rate.
 
       Optional parameters
+       :param fs:                  int/float, when fname is a numpy array, this is a required to be the sample rate.
+                                   Defaults to 0.
        :param dev_output:          bool, when False return the brightness, when True return all extracted features.
        :param clip_output:         bool, force the output to be between 0 and 100.
        :param phase_correction:    bool, Perform phase checking before summing to mono.
@@ -42,11 +48,10 @@ def timbral_brightness(fname, dev_output=False, clip_output=False, phase_correct
      See the License for the specific language governing permissions and
      limitations under the License.
     """
-    # use pysoundfile instead
-    audio_samples, fs = sf.read(fname, always_2d=False)
-
-    # reduce to mono
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
+    '''
+      Read input
+    '''
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
 
     '''
       Filter audio
@@ -78,13 +83,29 @@ def timbral_brightness(fname, dev_output=False, clip_output=False, phase_correct
     # set FFT parameters
     nfft = blockSize
     hop_size = int(3 * nfft / 4)
-    # get spectrogram
-    ratio_all_freq, ratio_all_time, ratio_all_spec = spectrogram(audio_samples, fs, 'hamming', nfft,
-                                                                 hop_size, nfft, 'constant', True, 'spectrum')
-    ratio_hp_freq, ratio_hp_time, ratio_hp_spec = spectrogram(ratio_highpass_audio, fs, 'hamming', nfft,
-                                                              hop_size, nfft, 'constant', True, 'spectrum')
-    centroid_hp_freq, centroid_hp_time, centroid_hp_spec = spectrogram(centroid_highpass_audio, fs, 'hamming', nfft,
-                                                                       hop_size, nfft, 'constant', True, 'spectrum')
+
+    # check that audio is long enough to generate spectrograms
+    if len(audio_samples) >= nfft:
+        # get spectrogram
+        ratio_all_freq, ratio_all_time, ratio_all_spec = spectrogram(audio_samples, fs, 'hamming', nfft,
+                                                                     hop_size, nfft, 'constant', True, 'spectrum')
+        ratio_hp_freq, ratio_hp_time, ratio_hp_spec = spectrogram(ratio_highpass_audio, fs, 'hamming', nfft,
+                                                                  hop_size, nfft, 'constant', True, 'spectrum')
+        centroid_hp_freq, centroid_hp_time, centroid_hp_spec = spectrogram(centroid_highpass_audio, fs, 'hamming', nfft,
+                                                                           hop_size, nfft, 'constant', True, 'spectrum')
+    else:
+        ratio_all_freq, ratio_all_time, ratio_all_spec = spectrogram(audio_samples, fs, 'hamming',
+                                                                     len(audio_samples),
+                                                                     len(audio_samples)-1,
+                                                                     nfft, 'constant', True, 'spectrum')
+        ratio_hp_freq, ratio_hp_time, ratio_hp_spec = spectrogram(ratio_highpass_audio, fs, 'hamming',
+                                                                  len(ratio_highpass_audio),
+                                                                  len(ratio_highpass_audio)-1,
+                                                                  nfft, 'constant', True, 'spectrum')
+        centroid_hp_freq, centroid_hp_time, centroid_hp_spec = spectrogram(centroid_highpass_audio, fs, 'hamming',
+                                                                           len(centroid_highpass_audio),
+                                                                           len(centroid_highpass_audio)-1,
+                                                                           nfft, 'constant', True, 'spectrum')
 
     # initialise variables for storing data
     all_ratio = []

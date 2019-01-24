@@ -70,12 +70,14 @@ def warm_region_cal(audio_samples, fs):
 
 
 def timbral_warmth(fname, dev_output=False, phase_correction=False, clip_output=False, max_FFT_frame_size=8192,
-                   max_WR = 12000):
+                   max_WR = 12000, fs=0):
     """
      This function estimates the perceptual Warmth of an audio file.
 
-     Version 0.3
-     This model of timbral warmth relates to Deliverable D5.7.
+     This model of timbral_warmth contains self loudness normalising methods and can accept arrays as an input
+     instead of a string filename.
+
+     Version 0.4
 
      Required parameter
     :param fname:                   string, Audio filename to be analysed, including full file path and extension.
@@ -105,11 +107,10 @@ def timbral_warmth(fname, dev_output=False, phase_correction=False, clip_output=
     limitations under the License.
 
     """
-    # use pysoundfile to read audio
-    audio_samples, fs = sf.read(fname, always_2d=False)
-
-    # channel reduction
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
+    '''
+      Read input
+    '''
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
 
     # get the weighted high frequency content
     mean_wr, _, _, weighted_hf = warm_region_cal(audio_samples, fs)
@@ -121,7 +122,12 @@ def timbral_warmth(fname, dev_output=False, phase_correction=False, clip_output=
     # calculate the onsets
     nperseg = 4096
     original_onsets = timbral_util.calculate_onsets(audio_samples, envelope, fs, nperseg=nperseg)
-
+    # If onsets don't exist, set it to time zero
+    if not original_onsets:
+        original_onsets = [0]
+    # set to start of file in the case where there is only one onset
+    if len(original_onsets) == 1:
+        original_onsets = [0]
     '''
       Initialise lists for storing features
     '''

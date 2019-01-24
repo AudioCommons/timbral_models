@@ -24,15 +24,16 @@ def sharpness_Fastl(loudspec):
     return sharp
 
 
-def timbral_sharpness(fname, dev_output=False, phase_correction=False):
+def timbral_sharpness(fname, dev_output=False, phase_correction=False, clip_output=False, fs=0):
     """
      This is an implementation of the matlab sharpness function found at:
      https://www.salford.ac.uk/research/sirc/research-groups/acoustics/psychoacoustics/sound-quality-making-products-sound-better/accordion/sound-quality-testing/matlab-codes
 
      This function calculates the apparent Sharpness of an audio file.
-     This version of timbral_sharpness relates to D5.7.
+     This version of timbral_sharpness contains self loudness normalising methods and can accept arrays as an input
+     instead of a string filename.
 
-     Version 0.3
+     Version 0.4
 
      Originally coded by Claire Churchill Sep 2004
      Transcoded by Andy Pearce 2018
@@ -44,6 +45,7 @@ def timbral_sharpness(fname, dev_output=False, phase_correction=False):
       :param dev_output:              bool, when False return the warmth, when True return all extracted features
       :param phase_correction:        bool, if the inter-channel phase should be estimated when performing a mono sum.
                                       Defaults to False.
+      :param clip_output:             bool, bool, force the output to be between 0 and 100.  Defaults to False.
 
       :return                         Apparent sharpness of the audio file.
 
@@ -63,10 +65,10 @@ def timbral_sharpness(fname, dev_output=False, phase_correction=False):
      limitations under the License.
 
     """
-
-    # use pysoundfile to read audio
-    audio_samples, fs = sf.read(fname, always_2d=False)
-    audio_samples = timbral_util.channel_reduction(audio_samples, phase_correction=phase_correction)
+    '''
+      Read input
+    '''
+    audio_samples, fs = timbral_util.file_read(fname, fs, phase_correction=phase_correction)
 
     # window the audio file into 4096 sample sections
     windowed_audio = timbral_util.window_audio(audio_samples, window_length=4096)
@@ -90,10 +92,29 @@ def timbral_sharpness(fname, dev_output=False, phase_correction=False):
 
         windowed_sharpness.append(sharpness)
 
+    # convert lists to numpy arrays for fancy indexing
+    windowed_rms = np.array(windowed_rms)
+    windowed_sharpness = np.array(windowed_sharpness)
     # calculate the sharpness as the rms-weighted average of sharpness
-    sharpness = np.average(windowed_sharpness, weights=windowed_rms)
+    rms_sharpness = np.average(windowed_sharpness, weights=(windowed_rms * windowed_rms))
+
+    # take the logarithm to better much subjective ratings
+    rms_sharpness = np.log10(rms_sharpness)
 
     if dev_output:
-        return [sharpness]
+        return [rms_sharpness]
     else:
+
+        all_metrics = np.ones(2)
+        all_metrics[0] = rms_sharpness
+
+        # coefficients from linear regression
+        coefficients = [102.50508921364404, 34.432655185001735]
+
+        # apply regression
+        sharpness = np.sum(all_metrics * coefficients)
+
+        if clip_output:
+            sharpness = timbral_util.output_clip(sharpness)
+
         return sharpness
