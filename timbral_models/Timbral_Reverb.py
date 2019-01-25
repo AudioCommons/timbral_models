@@ -10,7 +10,7 @@ def timbral_reverb(fname, fs=0, dev_output=False, phase_correction=False, clip_o
      This function classifies the audio file as either not sounding reverberant.
 
      This is based on the RT60 estimation algirhtm documented in:
-     Jan, T., and Wang, W., 2012: “Blind reverberation time estimation based on Laplace distribution”,
+     Jan, T., and Wang, W., 2012: "Blind reverberation time estimation based on Laplace distribution",
      EUSIPCO. pp. 2050-2054, Bucharest, Romania.
 
      Version 0.4
