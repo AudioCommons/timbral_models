@@ -41,7 +41,7 @@ def timbral_depth(fname, fs=0, dev_output=False, phase_correction=False, clip_ou
 
       :return:                             float, aparent depth of audio file, float.
 
-     Copyright 2018 Andy Pearce
+     Copyright 2018 Andy Pearce, Institute of Sound Recording, University of Surrey, UK.
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.

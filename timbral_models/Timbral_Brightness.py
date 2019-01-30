@@ -34,7 +34,7 @@ def timbral_brightness(fname, fs=0, dev_output=False, clip_output=False, phase_c
 
        :return:                    Apparent brightness of audio file, float.
 
-     Copyright 2018 Andy Pearce
+     Copyright 2018 Andy Pearce, Institute of Sound Recording, University of Surrey, UK.
 
      Licensed under the Apache License, Version 2.0 (the "License");
      you may not use this file except in compliance with the License.

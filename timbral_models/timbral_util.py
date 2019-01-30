@@ -13,7 +13,7 @@ import six
   
   Version 0.4 
   
-  Copyright 2018 Andy Pearce
+  Copyright 2018 Andy Pearce, Institute of Sound Recording, University of Surrey, UK.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.

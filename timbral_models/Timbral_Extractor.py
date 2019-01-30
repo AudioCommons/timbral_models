@@ -31,6 +31,8 @@ def timbral_extractor(fname, fs=0, dev_output=False, phase_correction=False, cli
 
       :return: timbre           the results from all timbral attributes as either a dictionary or list, depending
                                 on output_type.
+
+      Copyright 2019 Andy Pearce, Institute of Sound Recording, University of Surrey, UK.
     """
     '''
       Check output_type before calculating anything

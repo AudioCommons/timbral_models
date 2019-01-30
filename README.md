@@ -1,5 +1,5 @@
 ## AudioCommons Timbral Models
-The timbral models were devleoped by the [Institute of Sound Recording (IoSR)](http://www.iosr.uk/projects/AudioCommons/) at the University of Surrey, and was completed as part of the [AudioCommons project](https://www.audiocommons.org).  
+The timbral models were devleoped by the [Institute of Sound Recording (IoSR)](http://www.iosr.uk/AudioCommons/) at the University of Surrey, and was completed as part of the [AudioCommons project](https://www.audiocommons.org).  
 
 The current distribution contains python scripts for predicting eight timbral characteristics: *hardness*, *depth*, *brightness*, *roughness*, *warmth*, *sharpness*, *booming*, and *reverberation*.  
 

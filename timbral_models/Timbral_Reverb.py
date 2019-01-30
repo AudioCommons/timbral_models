@@ -30,7 +30,10 @@ def timbral_reverb(fname, fs=0, dev_output=False, phase_correction=False, clip_o
       :param clip_output:            Has no effect on the code.  Implemented for consistency with other timbral
                                      functions.
 
-      :return:
+      :return:                       predicted reverb of audio file.  1 represents the files osunds reverberant, 0
+                                     represents the files does not sound reverberant.
+
+      Copyright 2019 Andy Pearce, Institute of Sound Recording, University of Surrey, UK.
     """
     # needs to accept the input as audio file
     raw_audio_samples, fs = timbral_util.file_read(fname, fs=fs, phase_correction=False, mono_sum=False, loudnorm=False)
