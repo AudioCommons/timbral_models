@@ -214,7 +214,11 @@ def timbral_warmth(fname, dev_output=False, phase_correction=False, clip_output=
          HF decay
          - linear regression of the values above the warmth region
         '''
-        above_WR_spec = np.log10(spec[WR_upper_f_limit_idx:])
+        # Sometimes when there are zero values in the spec array (the intensity is null),
+        # the np.log10 raises a warning.
+        # Because the log10 is used to reduce the range of the values,
+        # when a value is zero, zero should be returned :
+        above_WR_spec = np.array([value if value == 0 else np.log10(value) for value in spec[WR_upper_f_limit_idx:]])
         above_WR_freq = np.log10(freq[WR_upper_f_limit_idx:])
         np.ones_like(above_WR_freq)
         metrics = np.array([above_WR_freq, np.ones_like(above_WR_freq)])
