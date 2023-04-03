@@ -85,7 +85,7 @@ def timbral_hardness(fname, fs=0, dev_output=False, phase_correction=False, clip
 
     # calculate the onsets
     original_onsets = timbral_util.calculate_onsets(audio_samples, envelope, fs, nperseg=nperseg)
-    onset_strength = librosa.onset.onset_strength(audio_samples, fs)
+    onset_strength = librosa.onset.onset_strength(y=audio_samples, sr=fs)
     # If onsets don't exist, set it to time zero
     if not original_onsets:
         original_onsets = [0]
