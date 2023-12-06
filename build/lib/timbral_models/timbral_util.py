@@ -639,7 +639,7 @@ def calculate_onsets(audio_samples, envelope_samples, fs, look_back_time=20, hys
                                             value of [0] is also possible during normal opperation.
     """
     # get onsets with librosa estimation
-    onsets = librosa.onset.onset_detect(y=audio_samples, sr=fs, backtrack=True, units='samples')
+    onsets = librosa.onset.onset_detect(audio_samples, fs, backtrack=True, units='samples')
 
     # set values for return_loop method
     time_thresh = int(look_back_time * 0.001 * fs)  # 10 ms default look-back time, in samples
@@ -747,7 +747,7 @@ def calculate_onsets(audio_samples, envelope_samples, fs, look_back_time=20, hys
         thd_corrected_onsets = []
 
         # get the onset strength
-        onset_strength = librosa.onset.onset_strength(y=audio_samples, sr=fs)
+        onset_strength = librosa.onset.onset_strength(audio_samples, fs)
 
         strength_onset_times = np.array(np.array(corrected_onsets) / 512).astype('int')
         strength_onset_times.clip(min=0)

@@ -24,7 +24,7 @@ setup(name='timbral_models',
           'soundfile',
           'scipy',
           'librosa',
-          'sklearn',
+          'scikit-learn',
           'pyloudnorm',
           'six'
       ],
