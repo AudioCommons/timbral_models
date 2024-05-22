@@ -18,13 +18,13 @@ The package can also be installed locally and be made editable.  To do this, clo
   
 
 ## Dependencies
-The script can also be downloaded manually from the github repository (https://github.com/AudioCommons/timbral_models).  If doing this, dependencies will need to be manually installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, `sklearn`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
+The script can also be downloaded manually from the github repository (https://github.com/AudioCommons/timbral_models).  If doing this, dependencies will need to be manually installed.  The timbral models rely on several other easily accessible python packages: `numpy`, `soundfile`, `librosa`, `scikit-learn`, and `scipy`.  These are all easily installed using the `pip install` command.  e.g.
 ```
 $ pip install numpy
 $ pip install soundfile
 $ pip install librosa
 $ pip install scipy
-$ pip install sklearn
+$ pip install scikit-learn
 $ pip install six
 $ pip install pyloudnorm   
 ```
