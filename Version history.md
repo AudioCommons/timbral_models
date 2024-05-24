@@ -13,11 +13,13 @@ This is available: http://www.audiocommons.org/materials/
 
 ## Past versions
 
+2024/05/24 - Version 0.4.1 of timbral_models fixes a dependency with scikit_lern and introduces timbral_models.__version__
+
 2019/01/24 - Version 0.4 of timbral_models, relates to Audio Commons Deliverable D5.8.  This version of the repository relates to the software version 0.4 on PyPI.
 
 2018/12/14 - Version 0.3 of timbral models, relates to Audio Commons Deliverable D5.7. This version of the repository relates to the software version 0.3 on PyPI.
 
-2018/07/26 - Version 0.2 of timbral models, relates to Audio Commons Deliverable D5.6.  This version of the repository relates to the software version 0.2 on PyPI. 
+2018/07/26 - Version 0.2 of timbral models, relates to Audio Commons Deliverable D5.6.  This version of the repository relates to the software version 0.2 on PyPI.
 
 2017/09/05 - Version 0.1 of timbral models, relates to Audio Commons Deliverable D5.3.  This version of the repository relates to the software version 0.1 on PyPI.
 
