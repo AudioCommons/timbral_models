@@ -1,4 +1,7 @@
 ## AudioCommons Timbral Models
+
+**NOTE**: this repository is no longer maintained. The timbral models can however be still installed by cloning the repository and running pip install (see below)
+
 The timbral models were devleoped by the [Institute of Sound Recording (IoSR)](http://www.iosr.uk/AudioCommons/) at the University of Surrey, and was completed as part of the [AudioCommons project](https://www.audiocommons.org).
 
 The current distribution contains python scripts for predicting eight timbral characteristics: *hardness*, *depth*, *brightness*, *roughness*, *warmth*, *sharpness*, *booming*, and *reverberation*.
@@ -71,7 +74,7 @@ Also contained in this repository is a full version of the timbral reverb model.
 ## Version History
 This section documents the version history of the timbral models.  To download a specific version of the model that relate to a specific deliverable, please check this section and download the most recent version from that date.
 
-2024/05/24 - Version 0.4.1 of timbral_models fixes a dependency with scikit_lern and introduces timbral_models.__version__
+2024/05/24 - Version 0.4.1 of timbral_models fixes a dependency with scikit_lern and introduces timbral_models.\_\_version\_\_
 
 2019/01/24 - Version 0.4 of timbral_models, relates to Audio Commons Deliverable D5.8.  This version of the repository relates to the software version 0.4 on PyPI.
 
