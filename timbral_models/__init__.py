@@ -1,3 +1,5 @@
+__version__ = '0.4.1'
+
 from .Timbral_Brightness import timbral_brightness
 from .Timbral_Depth import timbral_depth
 from .Timbral_Hardness import timbral_hardness
