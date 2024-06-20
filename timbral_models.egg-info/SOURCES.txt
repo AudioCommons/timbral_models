@@ -1,10 +1,13 @@
+LICENSE
 README.md
 setup.cfg
 setup.py
 timbral_models/Timbral_Booming.py
 timbral_models/Timbral_Brightness.py
 timbral_models/Timbral_Depth.py
+timbral_models/Timbral_Extractor.py
 timbral_models/Timbral_Hardness.py
+timbral_models/Timbral_Reverb.py
 timbral_models/Timbral_Roughness.py
 timbral_models/Timbral_Sharpness.py
 timbral_models/Timbral_Warmth.py
